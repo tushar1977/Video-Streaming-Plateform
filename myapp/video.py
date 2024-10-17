@@ -69,7 +69,6 @@ def watch_video(unique_name):
     print(video.file_name)
     return render_template(
         "watch.html",
-        current_user=current_user.id,
         video=video,
         video_url=video_url,
         comments=comments,
@@ -95,6 +94,7 @@ def stream_video(unique_name):
 
     resp = Response(chunk, 206, mimetype="video/mp4", content_type="video/mp4")
     resp.headers.add("Content-Range", f"bytes {start}-{end}/{file_size}")
+    print(resp.headers)
     return resp
 
 

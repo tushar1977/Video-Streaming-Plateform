@@ -10,6 +10,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-EXPOSE 8000
-RUN chmod +x /app/build.sh
-ENTRYPOINT ["/app/build.sh"]
+EXPOSE 8100
+
+ENV FLASK_APP=myapp \
+    FLASK_ENV=production \
+    DB_USERNAME=root \
+    DB_PASSWORD=Tushar2005! \
+    DB_HOSTNAME=45.67.216.197 \
+    DB_NAME=video_streaming \
+    PORT=8000
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "run:app"]
