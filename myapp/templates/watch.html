@@ -5,6 +5,11 @@
       href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"
       rel="stylesheet"
     />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
+      integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+      crossorigin="anonymous"
+    ></script>
     <meta charset="UTF-8" />
     <title>Video Streaming with Controls and Comments</title>
     <style>
@@ -42,83 +47,109 @@
   </head>
   <body>
     <div class="video-container">
-      <video controls>
+      <video id="videoPlayer" controls>
         <source
-          src="{{ url_for('video.stream_video', unique_name=video.unique_name) }}"
+          src="{{ url_for('video.stream_video', unique_name=video.unique_name, quality=current_quality) }}"
           type="video/mp4"
         />
         Your browser does not support the video tag.
       </video>
-
       <div class="quality-selector">
         <label for="quality">Video Quality: </label>
-        <select id="qualitySelector" onchange="changeQuality()">
-          <option value="480p">480p</option>
-          <option value="720p" selected>720p</option>
-          <option value="1080p">1080p</option>
+        <select id="qualitySelector">
+          <option value="480">480p</option>
+          <option value="720" selected>720p</option>
+          <option value="1080">1080p</option>
         </select>
       </div>
-      <div class="comment-section">
-        <h2>Comments</h2>
-        <form
-          class="comment-form"
-          action="{{ url_for('comm.upload_comment', unique_name=video.unique_name) }}"
-          method="post"
-        >
-          <textarea
-            name="comments"
-            rows="4"
-            cols="50"
-            placeholder="Add a comment..."
-          ></textarea
-          ><br />
-          <input type="submit" value="Post Comment" />
-        </form>
+    </div>
 
-        <div class="like-section" id="like-section">
-          <span>{{ likes|length }} likes</span>
-          {% set user_has_liked = false %} {% for like in likes %} {% if
-          like.user_id == current_user.id %} {% set user_has_liked = true %} {%
-          endif %} {% endfor %} {% if user_has_liked %}
-          <form
-            action="{{ url_for('like.like_action', like_action='dislike', unique_name=video.unique_name) }}"
-            method="POST"
-          >
-            <button type="submit"><i class="ri-thumb-up-fill"></i></button>
-          </form>
-          {% else %}
-          <form
-            action="{{ url_for('like.like_action', like_action='like', unique_name=video.unique_name) }}"
-            method="POST"
-          >
-            <button type="submit"><i class="ri-thumb-up-line"></i></button>
-          </form>
-          {% endif %}
-        </div>
-        <ul class="comment-list">
-          {% for c in comments %}
-          <li class="comment-item">
-            <p><strong>{{ c.user.name }}:</strong> {{ c.text }}</p>
-            <small
-              >Posted on: {{ c.created_at.strftime('%Y-%m-%d %H:%M:%S')
-              }}</small
-            >
-          </li>
-          {% endfor %}
-        </ul>
+    <div class="comment-section">
+      <h2>Comments</h2>
+      <form
+        class="comment-form"
+        action="{{ url_for('comm.upload_comment', unique_name=video.unique_name) }}"
+        method="post"
+      >
+        <textarea
+          name="comments"
+          rows="4"
+          cols="50"
+          placeholder="Add a comment..."
+        ></textarea
+        ><br />
+        <input type="submit" value="Post Comment" />
+      </form>
+
+      <div class="like-section" id="like-section">
+        <span>{{ likes|length }} likes</span>
+        {% set user_has_liked = false %} {% for like in likes %} {% if
+        like.user_id == current_user.id %} {% set user_has_liked = true %} {%
+        endif %} {% endfor %} {% if user_has_liked %}
+        <form
+          action="{{ url_for('like.like_action', like_action='dislike', unique_name=video.unique_name) }}"
+          method="POST"
+        >
+          <button type="submit"><i class="ri-thumb-up-fill"></i></button>
+        </form>
+        {% else %}
+        <form
+          action="{{ url_for('like.like_action', like_action='like', unique_name=video.unique_name) }}"
+          method="POST"
+        >
+          <button type="submit"><i class="ri-thumb-up-line"></i></button>
+        </form>
+        {% endif %}
       </div>
+      <ul class="comment-list">
+        {% for c in comments %}
+        <li class="comment-item">
+          <p><strong>{{ c.user.name }}:</strong> {{ c.text }}</p>
+          <small
+            >Posted on: {{ c.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small
+          >
+        </li>
+        {% endfor %}
+      </ul>
     </div>
     <script>
-      function changeQuality() {
-        const quality = document.getElementById("qualitySelector").value;
-        const videoPlayer = document.getElementById("videoPlayer");
+      var socket = io();
+
+      const qualitySelector = document.getElementById("qualitySelector");
+      const videoPlayer = document.getElementById("videoPlayer"); // Make sure videoPlayer is defined correctly
+
+      qualitySelector.addEventListener("change", function () {
+        const quality = this.value;
+        const currentTime = videoPlayer.currentTime;
+
+        console.log("Quality changed to:", quality);
+
+        socket.emit("quality_change", {
+          quality: quality,
+          unique_name: "{{ video.unique_name }}",
+        });
 
         const newSrc = `{{ url_for('video.stream_video', unique_name=video.unique_name) }}?quality=${quality}`;
-
         videoPlayer.src = newSrc;
         videoPlayer.load();
-        videoPlayer.play();
-      }
+
+        videoPlayer.addEventListener(
+          "loadedmetadata",
+          function () {
+            videoPlayer.currentTime = currentTime;
+            videoPlayer.play();
+          },
+          { once: true },
+        );
+      });
+      socket.on("connect", function () {
+        console.log("Connected to server");
+        socket.emit("Ping", { data: "Connected to Backend socket" });
+      });
+
+      socket.on("quality_changed", function (data) {
+        console.log("Quality changed to:", data.quality);
+      });
     </script>
   </body>
 </html>

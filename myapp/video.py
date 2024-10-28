@@ -10,11 +10,13 @@ from flask import (
 )
 from flask.helpers import flash
 from flask_login import login_required, current_user
+from flask_socketio import emit
 from werkzeug.utils import secure_filename
 import os
 from .models import Like, Video, Comment
 import random
 from . import db
+from . import sock
 import string
 import re
 import subprocess
@@ -27,6 +29,12 @@ class Video_Quality(Enum):
     Q480 = [854, 480]
     Q720 = [1280, 720]
     Q1080 = [1920, 1080]
+
+
+@sock.on("connect")
+def check_connection():
+    print("Client connected")
+    emit("Ping", {"data": "Connected to Backend socket"})
 
 
 def get_chunk(file_path, byte1=None, byte2=None):
@@ -42,9 +50,12 @@ def get_chunk(file_path, byte1=None, byte2=None):
     return chunk, start, end, file_size
 
 
-def get_file_path(filename):
+def get_file_path(
+    filename,
+    quality,
+):
     upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
-    return os.path.join(upload_folder, filename)
+    return os.path.join(upload_folder, filename, f"Q{quality}@{filename}.mp4")
 
 
 def resize_video(input_path, output_path, width, height):
@@ -72,6 +83,7 @@ def resize_video(input_path, output_path, width, height):
 
 @video.route("/watch/<string:unique_name>", methods=["GET"])
 def watch_video(unique_name):
+    quality = request.args.get("quality", default="720")
     video = Video.query.filter_by(unique_name=unique_name).first_or_404()
     comments = (
         Comment.query.filter_by(video_id=unique_name)
@@ -79,22 +91,38 @@ def watch_video(unique_name):
         .all()
     )
     likes = Like.query.filter_by(video_id=unique_name).all()
-    video_url = f"/watch/{video.unique_name}"
-    print(video_url)
-    print(video.file_name)
+    video_url = f"/watch/{video.unique_name}?quality={quality}"
+    video_path = get_file_path(video.file_name, quality)
     return render_template(
         "watch.html",
+        video_path=video_path,
         video=video,
         video_url=video_url,
         comments=comments,
         likes=likes,
+        current_quality=quality,
+    )
+
+
+@sock.on("quality_change")
+def handle_quality_change(data):
+    quality = data.get("quality")
+    unique_name = data.get("unique_name")
+    print(f"Quality change requested: {quality}p for video {unique_name}")
+
+    emit(
+        "quality_changed",
+        {"quality": quality, "unique_name": unique_name},
+        broadcast=True,
     )
 
 
 @video.route("/stream/<string:unique_name>", methods=["GET"])
 def stream_video(unique_name):
     video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-    file_path = get_file_path(video.file_name)
+
+    quality = request.args.get("quality", default="720")
+    file_path = get_file_path(video.file_name, quality)
     range_header = request.headers.get("Range", None)
     byte1, byte2 = 0, None
     print(range_header)
@@ -188,7 +216,7 @@ def upload():
         new_video = Video(
             video_title=str(video_title),
             video_desc=str(video_desc),
-            file_name=filename,
+            file_name=base_filename,
             thumbnail_name=imgname,
             user_id=current_user.id,
             unique_name=unique_name,
