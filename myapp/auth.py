@@ -1,23 +1,10 @@
-import os
-import secrets
-from datetime import datetime, timedelta
-from smtplib import SMTP
-import random
-from flask_mailman import Mail
-import bcrypt
-from dotenv import load_dotenv
-from flask import Blueprint, flash, render_template, request, session
+from flask import Blueprint, flash, render_template, request
 from flask.helpers import url_for
-from flask_login import login_user, logout_user
 from werkzeug.utils import redirect
-
 from . import db
-from .config import Config
 from .models import User
-
-load_dotenv()
-conf = Config()
-mail = Mail()
+import bcrypt
+from flask_login import login_user, logout_user
 
 auth = Blueprint("auth", __name__)
 
@@ -29,7 +16,6 @@ def signup():
 
 @auth.route("/signup", methods=["POST"])
 def signup_post():
-    global otp
     # code to validate and add user to database goes here
     email = request.form.get("email")
 
@@ -40,7 +26,7 @@ def signup_post():
     name = request.form.get("name")
     password = request.form.get("password")
 
-    if len(str(password)) <= 6:
+    if len(password) <= 6:
         flash("Password should be greater than 6 characters")
 
     if not email or not password or not name:
@@ -50,76 +36,18 @@ def signup_post():
         flash("Email already exist")
         return redirect(url_for("auth.signup"))
 
-    otp = random.randint(100000, 999999)
-    otp_expiry = datetime.utcnow() + timedelta(minutes=10)
-
     salt = bcrypt.gensalt(rounds=5)
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
-    session["signup_data"] = {
-        "email": email,
-        "name": name,
-        "password": hashed,
-        "otp": str(otp),
-        "otp_expiry": otp_expiry,
-    }
 
-    print("done session data")
+    new_user = User(
+        email=email,
+        name=name,
+        password=hashed,
+    )
+    db.session.add(new_user)
+    db.session.commit()
 
-    with SMTP(conf.MAIL_SERVER, conf.MAIL_PORT) as con:
-        con.starttls()
-        con.login(user="codewithmrpy@gmail.com", password="eaflyqlwydcznrgt")
-
-        con.sendmail(
-            from_addr="",
-            to_addrs=str(email),
-            msg=f"subject:Your signup OTP \n\n {otp}",
-        )
-
-    return redirect(url_for("auth.verify_otp"))
-
-
-@auth.route("/api/v1/otp")
-def verify_otp():
-    if "signup_data" not in session:
-        return redirect(url_for("auth.signup"))
-    return render_template("otp.html")
-
-
-@auth.route("/api/v1/otp", methods=["POST"])
-def verify_otp_post():
-    if "signup_data" not in session:
-        return redirect(url_for("auth.signup"))
-
-    signup_data = session["signup_data"]
-    user_otp = request.form.get("otp-input")
-
-    if datetime.utcnow() > signup_data["otp_expiry"]:
-        flash("OTP expired!!")
-        session.pop("signup_data")
-        return redirect(url_for("auth.signup"))
-
-    if user_otp != signup_data["otp"]:
-        flash("Invalid OTP!! Try again")
-        return redirect(url_for("auth.verify_otp"))
-
-    try:
-        new_user = User(
-            email=signup_data["email"],
-            name=signup_data["name"],
-            password=signup_data["password_hash"],
-        )
-        db.session.add(new_user)
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(e)
-        flash("Error creating account. Please try again.")
-        return redirect(url_for("auth.signup"))
-    finally:
-        session.pop("signup_data")
-
-    flash("Account created successfully! Please log in.")
     return redirect(url_for("auth.login"))
 
 

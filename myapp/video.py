@@ -2,9 +2,12 @@ import cv2
 from flask import (
     Blueprint,
     Response,
+    make_response,
     render_template,
     request,
     redirect,
+    send_file,
+    send_from_directory,
     url_for,
     current_app,
 )
@@ -13,6 +16,7 @@ from flask_login import login_required, current_user
 from flask_socketio import emit
 from werkzeug.utils import secure_filename
 import os
+
 from .models import Like, Video, Comment
 import random
 from . import db
@@ -29,12 +33,6 @@ class Video_Quality(Enum):
     Q480 = [854, 480]
     Q720 = [1280, 720]
     Q1080 = [1920, 1080]
-
-
-@sock.on("connect")
-def check_connection():
-    print("Client connected")
-    emit("Ping", {"data": "Connected to Backend socket"})
 
 
 def get_chunk(file_path, byte1=None, byte2=None):
@@ -55,10 +53,12 @@ def get_file_path(
     quality,
 ):
     upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
-    return os.path.join(upload_folder, filename, f"Q{quality}@{filename}.mp4")
+    return os.path.join(upload_folder, filename, f"Q{quality}@{filename}", "hls")
 
 
 def resize_video(input_path, output_path, width, height):
+    segment_dir = os.path.dirname(output_path)
+    os.makedirs(segment_dir, exist_ok=True)
     command = [
         "ffmpeg",
         "-i",
@@ -74,71 +74,84 @@ def resize_video(input_path, output_path, width, height):
         "-movflags",
         "+faststart",  # Ensures moov atom is at the start for smooth playback
         "-c:a",
-        "copy",
+        "aac",
+        "-hls_time",
+        "4",
+        "-hls_playlist_type",
+        "vod",
+        "-hls_segment_filename",
+        os.path.join(segment_dir, "segment_%03d.ts"),
+        "-hls_flags",
+        "independent_segments",
+        "-f",
+        "hls",
         "-y",
         output_path,
     ]
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, capture_output=True, text=True)
 
 
 @video.route("/watch/<string:unique_name>", methods=["GET"])
 def watch_video(unique_name):
-    quality = request.args.get("quality", default="720")
-    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-    comments = (
-        Comment.query.filter_by(video_id=unique_name)
-        .order_by(Comment.created_at.desc())
-        .all()
-    )
-    likes = Like.query.filter_by(video_id=unique_name).all()
-    video_url = f"/watch/{video.unique_name}?quality={quality}"
-    video_path = get_file_path(video.file_name, quality)
-    return render_template(
-        "watch.html",
-        video_path=video_path,
-        video=video,
-        video_url=video_url,
-        comments=comments,
-        likes=likes,
-        current_quality=quality,
-    )
-
-
-@sock.on("quality_change")
-def handle_quality_change(data):
-    quality = data.get("quality")
-    unique_name = data.get("unique_name")
-    print(f"Quality change requested: {quality}p for video {unique_name}")
-
-    emit(
-        "quality_changed",
-        {"quality": quality, "unique_name": unique_name},
-        broadcast=True,
-    )
+    return render_template("watch.html", unique_name=unique_name)
 
 
 @video.route("/stream/<string:unique_name>", methods=["GET"])
-def stream_video(unique_name):
-    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-
+def serve_hls(unique_name):
     quality = request.args.get("quality", default="720")
-    file_path = get_file_path(video.file_name, quality)
-    range_header = request.headers.get("Range", None)
-    byte1, byte2 = 0, None
-    print(range_header)
 
-    if range_header:
-        match = re.search(r"(\d+)-(\d*)", range_header)
-        if match:
-            groups = match.groups()
-            byte1, byte2 = int(groups[0]), (int(groups[1]) if groups[1] else None)
+    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
+    video_path = get_file_path(video.file_name, quality)
+    manifest_path = os.path.join(video_path, "stream.m3u8")
 
-    chunk, start, end, file_size = get_chunk(file_path, byte1, byte2)
+    if os.path.isfile(manifest_path):
+        with open(manifest_path, "r") as f:
+            content = f.read()
 
-    resp = Response(chunk, 206, mimetype="video/mp4", content_type="video/mp4")
-    resp.headers.add("Content-Range", f"bytes {start}-{end}/{file_size}")
-    print(resp.headers)
-    return resp
+        modified_content = []
+        for line in content.splitlines():
+            if line.endswith(".ts"):
+                segment_name = line.strip()
+                segment_url = f"/stream/{unique_name}/segment?quality={quality}&segment={segment_name}"
+                modified_content.append(segment_url)
+            else:
+                modified_content.append(line)
+
+        response = make_response("\n".join(modified_content))
+        response.headers.update(
+            {
+                "Content-Type": "application/vnd.apple.mpegurl",
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+        return response
+    return "Manifest not found", 404
+
+
+@video.route("/stream/<string:unique_name>/segment", methods=["GET"])
+def serve_segment(unique_name):
+    quality = request.args.get("quality", default="720")
+    segment = request.args.get("segment")
+
+    if not segment:
+        return "Segment parameter required", 400
+
+    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
+    video_path = get_file_path(video.file_name, quality)
+    segment_path = os.path.join(video_path, segment)
+
+    if os.path.isfile(segment_path):
+        response = make_response(send_from_directory(video_path, segment))
+        response.headers.update(
+            {
+                "Content-Type": "video/MP2T",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+            }
+        )
+        return response
+
+    return "Segment not found", 404
 
 
 @video.route("/upload", methods=["GET", "POST"])
@@ -181,7 +194,10 @@ def upload():
         processed_files = []
 
         for q in Video_Quality:
-            final_path = os.path.join(video_folder, f"{q.name}@{filename}")
+            quality_path = os.path.join(video_folder, f"{q.name}@{base_filename}")
+            hls_folder = os.path.join(quality_path, "hls")
+            os.makedirs(hls_folder, exist_ok=True)
+            final_path = os.path.join(hls_folder, "stream.m3u8")
 
             try:
                 resize_video(original_path, final_path, q.value[0], q.value[1])

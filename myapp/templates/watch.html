@@ -5,11 +5,17 @@
       href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"
       rel="stylesheet"
     />
+
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="upgrade-insecure-requests"
+    />
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
       integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
       crossorigin="anonymous"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <meta charset="UTF-8" />
     <title>Video Streaming with Controls and Comments</title>
     <style>
@@ -49,8 +55,8 @@
     <div class="video-container">
       <video id="videoPlayer" controls>
         <source
-          src="{{ url_for('video.stream_video', unique_name=video.unique_name, quality=current_quality) }}"
-          type="video/mp4"
+          src="{{ url_for('video.serve_hls', unique_name=unique_name, quality=current_quality) }}"
+          type="application/vnd.apple.mpegurl"
         />
         Your browser does not support the video tag.
       </video>
@@ -68,7 +74,7 @@
       <h2>Comments</h2>
       <form
         class="comment-form"
-        action="{{ url_for('comm.upload_comment', unique_name=video.unique_name) }}"
+        action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
         method="post"
       >
         <textarea
@@ -87,14 +93,14 @@
         like.user_id == current_user.id %} {% set user_has_liked = true %} {%
         endif %} {% endfor %} {% if user_has_liked %}
         <form
-          action="{{ url_for('like.like_action', like_action='dislike', unique_name=video.unique_name) }}"
+          action="{{ url_for('like.like_action', like_action='dislike', unique_name=unique_name) }}"
           method="POST"
         >
           <button type="submit"><i class="ri-thumb-up-fill"></i></button>
         </form>
         {% else %}
         <form
-          action="{{ url_for('like.like_action', like_action='like', unique_name=video.unique_name) }}"
+          action="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
           method="POST"
         >
           <button type="submit"><i class="ri-thumb-up-line"></i></button>
@@ -113,42 +119,40 @@
       </ul>
     </div>
     <script>
-      var socket = io();
-
       const qualitySelector = document.getElementById("qualitySelector");
       const videoPlayer = document.getElementById("videoPlayer");
+      const uniqueName = "{{ unique_name }}";
+      var hls = new Hls();
+      let currentQuality = qualitySelector.value;
+
+      const loadVideo = (quality, startTime = 0, isPlaying = false) => {
+        const newSrc = `{{ url_for('video.serve_hls', unique_name=unique_name) }}?quality=${quality}`;
+        if (Hls.isSupported()) {
+          hls.detachMedia();
+          hls.loadSource(newSrc);
+          hls.attachMedia(videoPlayer);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            videoPlayer.currentTime = startTime;
+            if (isPlaying) videoPlayer.play();
+          });
+        } else if (videoPlayer.canPlayType("application/vnd.apple.mpegurl")) {
+          videoPlayer.src = newSrc;
+          videoPlayer.addEventListener("loadedmetadata", () => {
+            videoPlayer.currentTime = startTime;
+            if (isPlaying) videoPlayer.play();
+          });
+        }
+      };
+      loadVideo(currentQuality);
 
       qualitySelector.addEventListener("change", function () {
         const quality = this.value;
         const currentTime = videoPlayer.currentTime;
+        const isPlaying = !videoPlayer.paused;
 
         console.log("Quality changed to:", quality);
-
-        socket.emit("quality_change", {
-          quality: quality,
-          unique_name: "{{ video.unique_name }}",
-        });
-
-        const newSrc = `{{ url_for('video.stream_video', unique_name=video.unique_name) }}?quality=${quality}`;
-        videoPlayer.src = newSrc;
-        videoPlayer.load();
-
-        videoPlayer.addEventListener(
-          "loadedmetadata",
-          function () {
-            videoPlayer.currentTime = currentTime;
-            videoPlayer.play();
-          },
-          { once: true },
-        );
-      });
-      socket.on("connect", function () {
-        console.log("Connected to server");
-        socket.emit("Ping", { data: "Connected to Backend socket" });
-      });
-
-      socket.on("quality_changed", function (data) {
-        console.log("Quality changed to:", data.quality);
+        currentQuality = quality;
+        loadVideo(quality, currentTime, isPlaying);
       });
     </script>
   </body>
