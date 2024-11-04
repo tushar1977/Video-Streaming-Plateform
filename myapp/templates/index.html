@@ -27,7 +27,7 @@
               <h5 class="card-title">{{ item.video.video_title }}</h5>
               <p class="card-text">{{ item.video.video_desc }}</p>
               <a
-                href="{{ url_for('video.serve_hls', unique_name=item.video.unique_name) }}"
+                href="{{ url_for('video.watch_video', unique_name=item.video.unique_name) }}"
                 class="btn btn-primary"
                 >Watch Video</a
               >

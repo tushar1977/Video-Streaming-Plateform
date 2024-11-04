@@ -126,7 +126,11 @@
       let currentQuality = qualitySelector.value;
 
       const loadVideo = (quality, startTime = 0, isPlaying = false) => {
-        const newSrc = `{{ url_for('video.serve_hls', unique_name=unique_name) }}?quality=${quality}`;
+        const newSrc =
+          `{{ url_for('video.serve_quality_playlist', unique_name=unique_name, quality='QUALITY') }}`.replace(
+            "QUALITY",
+            quality,
+          );
         if (Hls.isSupported()) {
           hls.detachMedia();
           hls.loadSource(newSrc);

@@ -56,6 +56,13 @@ def get_file_path(
     return os.path.join(upload_folder, filename, f"Q{quality}@{filename}", "hls")
 
 
+def get_video_path(
+    filename,
+):
+    upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
+    return os.path.join(upload_folder, filename)
+
+
 def resize_video(input_path, output_path, width, height):
     segment_dir = os.path.dirname(output_path)
     os.makedirs(segment_dir, exist_ok=True)
@@ -88,7 +95,38 @@ def resize_video(input_path, output_path, width, height):
         "-y",
         output_path,
     ]
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    print(result.stdout)
+
+
+def get_bitrate_for_quality(quality: Video_Quality) -> int:
+    """Calculate appropriate bitrate for each quality"""
+    bitrate_map = {
+        Video_Quality.Q480: 1000,  # 1000k for 480p
+        Video_Quality.Q720: 2500,  # 2500k for 720p
+        Video_Quality.Q1080: 5000,  # 5000k for 1080p
+    }
+    return bitrate_map[quality]
+
+
+def create_master_playlist(unique_name, output_dir: str, base_filename: str):
+    master_content = "#EXTM3U\n#EXT-X-VERSION:3\n\n"
+
+    for quality in Video_Quality:
+        width, height = quality.value
+        bitrate = get_bitrate_for_quality(quality)
+
+        quality_url = f"/watch/{unique_name}/{quality.name}.m3u8"
+
+        total_bandwidth = (bitrate + 128) * 1000
+        master_content += f'#EXT-X-STREAM-INF:BANDWIDTH={total_bandwidth},RESOLUTION={width}x{height},CODECS="avc1.64001f,mp4a.40.2"\n'
+        master_content += f"{quality_url}\n\n"
+
+    master_path = os.path.join(output_dir, "master.m3u8")
+    with open(master_path, "w") as f:
+        f.write(master_content)
+
+    return master_path
 
 
 @video.route("/watch/<string:unique_name>", methods=["GET"])
@@ -96,10 +134,31 @@ def watch_video(unique_name):
     return render_template("watch.html", unique_name=unique_name)
 
 
-@video.route("/stream/<string:unique_name>", methods=["GET"])
+@video.route("/watch/<string:unique_name>/master.m3u8", methods=["GET"])
 def serve_hls(unique_name):
-    quality = request.args.get("quality", default="720")
+    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
+    master_path = get_video_path(video.file_name)
+    master_manifest_path = os.path.join(master_path, "master.m3u8")
+    print(master_manifest_path)
 
+    if os.path.isfile(master_manifest_path):
+        with open(master_manifest_path, "r") as f:
+            master_content = f.read()
+
+        response = make_response(master_content)
+        response.headers.update(
+            {
+                "Content-Type": "application/vnd.apple.mpegurl",
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+        return response
+
+    return "Master manifest not found", 404
+
+
+@video.route("/watch/<string:unique_name>/Q<string:quality>.m3u8", methods=["GET"])
+def serve_quality_playlist(unique_name, quality):
     video = Video.query.filter_by(unique_name=unique_name).first_or_404()
     video_path = get_file_path(video.file_name, quality)
     manifest_path = os.path.join(video_path, "stream.m3u8")
@@ -125,12 +184,13 @@ def serve_hls(unique_name):
             }
         )
         return response
-    return "Manifest not found", 404
+
+    return "Quality manifest not found", 404
 
 
 @video.route("/stream/<string:unique_name>/segment", methods=["GET"])
 def serve_segment(unique_name):
-    quality = request.args.get("quality", default="720")
+    quality = request.args.get("quality")
     segment = request.args.get("segment")
 
     if not segment:
@@ -229,6 +289,8 @@ def upload():
         unique_name = "".join(
             random.choice(string.ascii_letters + string.digits) for _ in range(8)
         )
+
+        create_master_playlist(unique_name, video_folder, base_filename)
         new_video = Video(
             video_title=str(video_title),
             video_desc=str(video_desc),
