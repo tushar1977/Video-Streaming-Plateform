@@ -19,6 +19,8 @@ class Config:
     UPLOAD_FOLDER_IMAGE = os.path.join(os.getcwd(), "myapp", "static", "img")
     SEND_FILE_MAX_AGE_DEFAULT = 0
 
+    MAIL_PORT = 587
+    MAIL_SERVER = "smtp.google.com"
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_size": 10,
         "max_overflow": 20,

@@ -1,12 +1,14 @@
 from myapp import sock, create_app
 import os
 
-app = create_app()
+from flask_socketio import SocketIO
 
+app = create_app()
 
 if __name__ == "__main__":
     sock.run(
         app,
+        ssl_context=("../cert.pem", "../key.pem"),
         host="0.0.0.0",
         debug=True,
         allow_unsafe_werkzeug=True,

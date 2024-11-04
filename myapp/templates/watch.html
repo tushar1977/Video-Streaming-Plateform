@@ -5,6 +5,17 @@
       href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"
       rel="stylesheet"
     />
+
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="upgrade-insecure-requests"
+    />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
+      integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <meta charset="UTF-8" />
     <title>Video Streaming with Controls and Comments</title>
     <style>
@@ -17,6 +28,11 @@
       .video-container video {
         width: 100%;
         height: 100%;
+      }
+
+      .quality-selector {
+        margin-top: 10px;
+        text-align: center;
       }
       .comment-section {
         width: 1400px;
@@ -37,62 +53,111 @@
   </head>
   <body>
     <div class="video-container">
-      <video controls>
+      <video id="videoPlayer" controls>
         <source
-          src="{{ url_for('video.stream_video', unique_name=video.unique_name) }}"
-          type="video/mp4"
+          src="{{ url_for('video.serve_hls', unique_name=unique_name, quality=current_quality) }}"
+          type="application/vnd.apple.mpegurl"
         />
         Your browser does not support the video tag.
       </video>
-      <div class="comment-section">
-        <h2>Comments</h2>
-        <form
-          class="comment-form"
-          action="{{ url_for('comm.upload_comment', unique_name=video.unique_name) }}"
-          method="post"
-        >
-          <textarea
-            name="comments"
-            rows="4"
-            cols="50"
-            placeholder="Add a comment..."
-          ></textarea
-          ><br />
-          <input type="submit" value="Post Comment" />
-        </form>
-
-        <div class="like-section" id="like-section">
-          <span>{{ likes|length }} likes</span>
-          {% set user_has_liked = false %} {% for like in likes %} {% if
-          like.user_id == current_user.id %} {% set user_has_liked = true %} {%
-          endif %} {% endfor %} {% if user_has_liked %}
-          <form
-            action="{{ url_for('like.like_action', like_action='dislike', unique_name=video.unique_name) }}"
-            method="POST"
-          >
-            <button type="submit"><i class="ri-thumb-up-fill"></i></button>
-          </form>
-          {% else %}
-          <form
-            action="{{ url_for('like.like_action', like_action='like', unique_name=video.unique_name) }}"
-            method="POST"
-          >
-            <button type="submit"><i class="ri-thumb-up-line"></i></button>
-          </form>
-          {% endif %}
-        </div>
-        <ul class="comment-list">
-          {% for c in comments %}
-          <li class="comment-item">
-            <p><strong>{{ c.user.name }}:</strong> {{ c.text }}</p>
-            <small
-              >Posted on: {{ c.created_at.strftime('%Y-%m-%d %H:%M:%S')
-              }}</small
-            >
-          </li>
-          {% endfor %}
-        </ul>
+      <div class="quality-selector">
+        <label for="quality">Video Quality: </label>
+        <select id="qualitySelector">
+          <option value="480">480p</option>
+          <option value="720" selected>720p</option>
+          <option value="1080">1080p</option>
+        </select>
       </div>
     </div>
+
+    <div class="comment-section">
+      <h2>Comments</h2>
+      <form
+        class="comment-form"
+        action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
+        method="post"
+      >
+        <textarea
+          name="comments"
+          rows="4"
+          cols="50"
+          placeholder="Add a comment..."
+        ></textarea
+        ><br />
+        <input type="submit" value="Post Comment" />
+      </form>
+
+      <div class="like-section" id="like-section">
+        <span>{{ likes|length }} likes</span>
+        {% set user_has_liked = false %} {% for like in likes %} {% if
+        like.user_id == current_user.id %} {% set user_has_liked = true %} {%
+        endif %} {% endfor %} {% if user_has_liked %}
+        <form
+          action="{{ url_for('like.like_action', like_action='dislike', unique_name=unique_name) }}"
+          method="POST"
+        >
+          <button type="submit"><i class="ri-thumb-up-fill"></i></button>
+        </form>
+        {% else %}
+        <form
+          action="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
+          method="POST"
+        >
+          <button type="submit"><i class="ri-thumb-up-line"></i></button>
+        </form>
+        {% endif %}
+      </div>
+      <ul class="comment-list">
+        {% for c in comments %}
+        <li class="comment-item">
+          <p><strong>{{ c.user.name }}:</strong> {{ c.text }}</p>
+          <small
+            >Posted on: {{ c.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small
+          >
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <script>
+      const qualitySelector = document.getElementById("qualitySelector");
+      const videoPlayer = document.getElementById("videoPlayer");
+      const uniqueName = "{{ unique_name }}";
+      var hls = new Hls();
+      let currentQuality = qualitySelector.value;
+
+      const loadVideo = (quality, startTime = 0, isPlaying = false) => {
+        const newSrc =
+          `{{ url_for('video.serve_quality_playlist', unique_name=unique_name, quality='QUALITY') }}`.replace(
+            "QUALITY",
+            quality,
+          );
+        if (Hls.isSupported()) {
+          hls.detachMedia();
+          hls.loadSource(newSrc);
+          hls.attachMedia(videoPlayer);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            videoPlayer.currentTime = startTime;
+            if (isPlaying) videoPlayer.play();
+          });
+        } else if (videoPlayer.canPlayType("application/vnd.apple.mpegurl")) {
+          videoPlayer.src = newSrc;
+          videoPlayer.addEventListener("loadedmetadata", () => {
+            videoPlayer.currentTime = startTime;
+            if (isPlaying) videoPlayer.play();
+          });
+        }
+      };
+      loadVideo(currentQuality);
+
+      qualitySelector.addEventListener("change", function () {
+        const quality = this.value;
+        const currentTime = videoPlayer.currentTime;
+        const isPlaying = !videoPlayer.paused;
+
+        console.log("Quality changed to:", quality);
+        currentQuality = quality;
+        loadVideo(quality, currentTime, isPlaying);
+      });
+    </script>
   </body>
 </html>
