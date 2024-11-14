@@ -1,46 +1,73 @@
-{% extends "base.html" %} {% block content %}
-<div class="column is-4 is-offset-4">
-  <h3 class="title">Login</h3>
-  <div class="box">{% with messages = get_flashed_messages() %}
-{% if messages %}
-    <div class="notification is-danger">
+{% extends "base.html" %}
+{% block content %}
+<div class="flex justify-center items-center  bg-gray-100">
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-6 text-gray-800 text-center">Log In</h2>
+    
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
         {{ messages[0] }}
-    </div>
-{% endif %}
-{% endwith %}
+      </div>
+    {% endif %}
+    {% endwith %}
+    
     <form method="POST" action="/login">
-      <div class="field">
-        <div class="control">
-          <input
-            class="input is-large"
-            type="email"
-            name="email"
-            placeholder="Your Email"
-            autofocus=""
-          />
-        </div>
+      <!-- Email Field -->
+      <div class="mb-4">
+        <label class="block text-gray-700 font-medium mb-1" for="email">Email</label>
+        <input
+          id="email"
+          class="input input-bordered w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="email"
+          name="email"
+          placeholder="Enter your email"
+          required
+        />
       </div>
 
-      <div class="field">
-        <div class="control">
-          <input
-            class="input is-large"
-            type="password"
-            name="password"
-            placeholder="Your Password"
-          />
-        </div>
+      <!-- Password Field -->
+      <div class="mb-4">
+        <label class="block text-gray-700 font-medium mb-1" for="password">Password</label>
+        <input
+          id="password"
+          class="input input-bordered w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="password"
+          name="password"
+          placeholder="Enter your password"
+          required
+        />
       </div>
-      <div class="field">
-        <label class="checkbox">
-          <input type="checkbox" name="remember" />
+
+      <!-- Remember Me Checkbox -->
+      <div class="mb-4 flex items-center">
+        <input
+          id="remember"
+          type="checkbox"
+          name="remember"
+          class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <label for="remember" class="ml-2 block text-gray-700 text-sm">
           Remember me
         </label>
       </div>
-      <button class="button is-block is-info is-large is-fullwidth">
-        Login
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+      >
+        Log In
       </button>
     </form>
+
+    <!-- Additional Links -->
+    <div class="mt-2 text-center">
+      <p class="text-sm">
+        Don’t have an account? 
+        <a href="/signup" class="text-blue-600 hover:underline">Sign up</a>
+      </p>
+    </div>
   </div>
 </div>
 {% endblock %}

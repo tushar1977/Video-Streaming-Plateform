@@ -62,6 +62,7 @@ def login_check():
     password = request.form.get("password")
     remember = True if request.form.get("remember") else False
 
+
     user = User.query.filter_by(email=email).first()
 
     if not user or not user.check_password(password):

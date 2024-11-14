@@ -4,55 +4,89 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <title>Flask Auth Example</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.2/css/bulma.min.css"
-    />
   </head>
 
-  <body>
-    <section class="hero is-primary is-fullheight">
-      <div class="hero-head">
-        <nav class="navbar">
-          <div class="container">
-            <div id="navbarMenuHeroA" class="navbar-menu">
-              <div class="navbar-end">
-                {% if current_user.is_authenticated %}
-                <a href="{{ url_for('home.index') }}" class="navbar-item">
-                  Home
-                </a>
-                {% endif %} {% if current_user.is_authenticated %}
-                <a href="{{ url_for('home.profile') }}" class="navbar-item">
-                  Profile
-                </a>
-                {% endif %} {% if current_user.is_authenticated %}
-                <a href="{{ url_for('video.upload') }}" class="navbar-item">
-                  Upload
-                </a>
-                {% endif %}{% if not current_user.is_authenticated %}
-                <a href="{{ url_for('auth.login') }}" class="navbar-item">
-                  Login
-                </a>
-                <a href="{{ url_for('auth.signup') }}" class="navbar-item">
-                  Sign Up
-                </a>
-                {% endif %} {% if current_user.is_authenticated %}
-                <a href="{{ url_for('auth.logout') }}" class="navbar-item">
-                  Logout
-                </a>
-                {% endif %}
-              </div>
-            </div>
+  <body class="min-h-screen bg-gray-100 flex flex-col">
+    <!-- Navbar -->
+    <nav class="bg-gray-800">
+      <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-4">
+          <div class="text-white text-lg font-bold">MyApp</div>
+          <button
+            class="text-white md:hidden block focus:outline-none"
+            id="navbar-toggle"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16m-7 6h7"
+              ></path>
+            </svg>
+          </button>
+          <div class="hidden md:flex space-x-4 text-white" id="navbar-menu">
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('home.index') }}" class="hover:underline"
+              >Home</a
+            >
+            <a href="{{ url_for('home.profile') }}" class="hover:underline"
+              >Profile</a
+            >
+            <a href="{{ url_for('video.upload') }}" class="hover:underline"
+              >Upload</a
+            >
+            <a href="{{ url_for('auth.logout') }}" class="hover:underline"
+              >Logout</a
+            >
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="hover:underline"
+              >Login</a
+            >
+            <a href="{{ url_for('auth.signup') }}" class="hover:underline"
+              >Sign Up</a
+            >
+            {% endif %}
           </div>
-        </nav>
-      </div>
-
-      <div class="hero-body">
-        <div class="container has-text-centered">
-          {% block content %} {% endblock %}
+        </div>
+        <div class="md:hidden hidden" id="mobile-menu">
+          <div class="space-y-2 text-white py-2">
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('home.index') }}" class="block">Home</a>
+            <a href="{{ url_for('home.profile') }}" class="block">Profile</a>
+            <a href="{{ url_for('video.upload') }}" class="block">Upload</a>
+            <a href="{{ url_for('auth.logout') }}" class="block">Logout</a>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="block">Login</a>
+            <a href="{{ url_for('auth.signup') }}" class="block">Sign Up</a>
+            {% endif %}
+          </div>
         </div>
       </div>
-    </section>
+    </nav>
+
+    <!-- Hero Content -->
+    <div class="flex-grow flex items-center justify-center">
+      <div class="bg-white p-8 rounded-lg shadow-lg w-max>
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+
+    <script>
+      const navbarToggle = document.getElementById("navbar-toggle");
+      const mobileMenu = document.getElementById("mobile-menu");
+
+      navbarToggle.addEventListener("click", () => {
+        mobileMenu.classList.toggle("hidden");
+      });
+    </script>
   </body>
 </html>

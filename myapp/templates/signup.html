@@ -1,51 +1,62 @@
-{% extends "base.html" %} {% block content %}
-<div class="column is-4 is-offset-4">
-  <h3 class="title">Sign Up</h3>
-  <div class="box">{% with messages = get_flashed_messages() %}
-{% if messages %}
-    <div class="notification is-danger">
+{% extends "base.html" %} 
+{% block content %}
+<div class="flex justify-center items-center bg-gray-100">
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-6 text-gray-800 text-center">Sign Up</h2>
+    
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
         {{ messages[0] }}
-    </div>
-{% endif %}
-{% endwith %}
-
+      </div>
+    {% endif %}
+    {% endwith %}
+    
     <form method="POST" action="/signup">
-      <div class="field">
-        <div class="control">
-          <input
-            class="input is-large"
-            type="email"
-            name="email"
-            placeholder="Email"
-            autofocus=""
-          />
-        </div>
+      <!-- Email Field -->
+      <div class="mb-4">
+        <label class="block text-gray-700 font-medium mb-1" for="email">Email</label>
+        <input
+          id="email"
+          class="input input-bordered w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="email"
+          name="email"
+          placeholder="Enter your email"
+          required
+        />
       </div>
 
-      <div class="field">
-        <div class="control">
-          <input
-            class="input is-large"
-            type="text"
-            name="name"
-            placeholder="Name"
-            autofocus=""
-          />
-        </div>
+      <!-- Name Field -->
+      <div class="mb-4">
+        <label class="block text-gray-700 font-medium mb-1" for="name">Name</label>
+        <input
+          id="name"
+          class="input input-bordered w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="text"
+          name="name"
+          placeholder="Enter your name"
+          required
+        />
       </div>
 
-      <div class="field">
-        <div class="control">
-          <input
-            class="input is-large"
-            type="password"
-            name="password"
-            placeholder="Password"
-          />
-        </div>
+      <!-- Password Field -->
+      <div class="mb-4">
+        <label class="block text-gray-700 font-medium mb-1" for="password">Password</label>
+        <input
+          id="password"
+          class="input input-bordered w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="password"
+          name="password"
+          placeholder="Enter your password"
+          required
+        />
       </div>
 
-      <button class="button is-block is-info is-large is-fullwidth">
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+      >
         Sign Up
       </button>
     </form>
