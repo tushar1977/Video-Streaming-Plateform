@@ -131,7 +131,11 @@ def create_master_playlist(unique_name, output_dir: str, base_filename: str):
 
 @video.route("/watch/<string:unique_name>", methods=["GET"])
 def watch_video(unique_name):
-    return render_template("watch.html", unique_name=unique_name)
+    likes = Like.query.filter_by(video_id=unique_name).all()
+    like_count = len(likes)
+    user_has_liked = any(like.user_id == current_user.id for like in likes)
+    return render_template("watch.html", unique_name=unique_name, like_count=like_count, 
+                           user_has_liked=user_has_liked,)
 
 
 @video.route("/watch/<string:unique_name>/master.m3u8", methods=["GET"])

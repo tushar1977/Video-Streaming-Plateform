@@ -5,11 +5,17 @@
       href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"
       rel="stylesheet"
     />
-
     <meta
       http-equiv="Content-Security-Policy"
       content="upgrade-insecure-requests"
     />
+
+    <script src="https://unpkg.com/htmx.org@1.8.4"></script>
+    <script
+      src="https://unpkg.com/htmx.org@2.0.3"
+      integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq"
+      crossorigin="anonymous"
+    ></script>
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
       integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
@@ -18,51 +24,26 @@
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <meta charset="UTF-8" />
     <title>Video Streaming with Controls and Comments</title>
-    <style>
-      .video-container {
-        width: 1400px;
-        height: 700px;
-        margin: 0 auto;
-        background-color: #000;
-      }
-      .video-container video {
-        width: 100%;
-        height: 100%;
-      }
-
-      .quality-selector {
-        margin-top: 10px;
-        text-align: center;
-      }
-      .comment-section {
-        width: 1400px;
-        margin: 20px auto;
-      }
-      .comment-form {
-        margin-bottom: 20px;
-      }
-      .comment-list {
-        list-style-type: none;
-        padding: 0;
-      }
-      .comment-item {
-        border-bottom: 1px solid #ccc;
-        padding: 10px 0;
-      }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
-    <div class="video-container">
-      <video id="videoPlayer" controls>
+  <body class="bg-gray-100 font-sans text-gray-800">
+    <!-- Video Section -->
+    <div
+      class="video-container max-w-7xl mx-40 mx-auto my-10 bg-black rounded-lg shadow-lg"
+    >
+      <video id="videoPlayer" controls class="w-full rounded-lg">
         <source
           src="{{ url_for('video.serve_hls', unique_name=unique_name, quality=current_quality) }}"
           type="application/vnd.apple.mpegurl"
         />
         Your browser does not support the video tag.
       </video>
-      <div class="quality-selector">
-        <label for="quality">Video Quality: </label>
-        <select id="qualitySelector">
+      <div class="quality-selector mt-4 text-center">
+        <label for="quality" class="text-white text-lg">Video Quality: </label>
+        <select
+          id="qualitySelector"
+          class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
+        >
           <option value="480">480p</option>
           <option value="720" selected>720p</option>
           <option value="1080">1080p</option>
@@ -70,55 +51,95 @@
       </div>
     </div>
 
-    <div class="comment-section">
-      <h2>Comments</h2>
+    <!-- Comments Section -->
+    <div class="comment-section max-w-7xl mx-auto my-10 px-4">
+      <h2 class="text-2xl font-semibold mb-6">Comments</h2>
+
+      <!-- Comment Form -->
       <form
-        class="comment-form"
+        class="comment-form mb-6"
         action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
         method="post"
       >
         <textarea
           name="comments"
           rows="4"
-          cols="50"
+          class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           placeholder="Add a comment..."
-        ></textarea
-        ><br />
-        <input type="submit" value="Post Comment" />
+        ></textarea>
+        <button
+          type="submit"
+          class="mt-2 m-2 px-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          Post Comment
+        </button>
       </form>
 
-      <div class="like-section" id="like-section">
-        <span>{{ likes|length }} likes</span>
-        {% set user_has_liked = false %} {% for like in likes %} {% if
-        like.user_id == current_user.id %} {% set user_has_liked = true %} {%
-        endif %} {% endfor %} {% if user_has_liked %}
+      <!-- Like Section -->
+      <div id="like-section" data-unique-name="{{ unique_name }}">
         <form
-          action="{{ url_for('like.like_action', like_action='dislike', unique_name=unique_name) }}"
-          method="POST"
+          hx-post="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
+          hx-trigger="click"
+          hx-target="#like-section"
+          hx-swap="outerHTML"
+          hx-include="[name=unique_name]"
         >
-          <button type="submit"><i class="ri-thumb-up-fill"></i></button>
+          <input type="hidden" name="unique_name" value="{{ unique_name }}" />
+
+          <button
+            type="submit"
+            id="button"
+            class="{{ 'text-blue-500' if user_has_liked else 'text-gray-500 hover:text-gray-700' }}"
+          >
+            <i
+              class="{{ 'ri-thumb-up-fill' if user_has_liked else 'ri-thumb-up-line' }} text-xl"
+            ></i>
+            {{ 'Liked' if user_has_liked else 'Like' }}
+          </button>
         </form>
-        {% else %}
-        <form
-          action="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
-          method="POST"
-        >
-          <button type="submit"><i class="ri-thumb-up-line"></i></button>
-        </form>
-        {% endif %}
+        <span id="like-count">{{ like_count }} likes</span>
       </div>
-      <ul class="comment-list">
+      <!-- Comment List -->
+      <ul class="comment-list space-y-4">
         {% for c in comments %}
-        <li class="comment-item">
-          <p><strong>{{ c.user.name }}:</strong> {{ c.text }}</p>
-          <small
+        <li class="comment-item p-4 bg-white rounded-lg shadow-md">
+          <p>
+            <strong class="font-semibold">{{ c.user.name }}:</strong> {{ c.text
+            }}
+          </p>
+          <small class="text-gray-500"
             >Posted on: {{ c.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small
           >
         </li>
         {% endfor %}
       </ul>
     </div>
+
     <script>
+      document.body.addEventListener("htmx:afterSwap", function (event) {
+        if (event.detail.xhr.responseText) {
+          const response = JSON.parse(event.detail.xhr.responseText);
+          console.log(response);
+
+          const likeCountElement = document.getElementById("like-count");
+          if (likeCountElement) {
+            likeCountElement.textContent = `${response.like_count} likes`;
+          }
+
+          const likeButton = event.target.querySelector("button");
+          if (response.user_has_liked) {
+            likeButton.innerHTML =
+              '<i class="ri-thumb-up-fill text-xl"></i> Liked';
+            likeButton.classList.add("text-blue-500");
+            likeButton.classList.remove("text-gray-500");
+          } else {
+            likeButton.innerHTML =
+              '<i class="ri-thumb-up-line text-xl"></i> Like';
+            likeButton.classList.add("text-gray-500");
+            likeButton.classList.remove("text-blue-500");
+          }
+        }
+      });
       const qualitySelector = document.getElementById("qualitySelector");
       const videoPlayer = document.getElementById("videoPlayer");
       const uniqueName = "{{ unique_name }}";
@@ -153,7 +174,6 @@
         const quality = this.value;
         const currentTime = videoPlayer.currentTime;
         const isPlaying = !videoPlayer.paused;
-
         console.log("Quality changed to:", quality);
         currentQuality = quality;
         loadVideo(quality, currentTime, isPlaying);

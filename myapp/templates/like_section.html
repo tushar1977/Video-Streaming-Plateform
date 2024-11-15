@@ -1,0 +1,16 @@
+<div id="like-section" data-unique-name="{{ unique_name }}">
+  <form
+    hx-post="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
+    hx-trigger="click"
+    hx-target="#like-section"
+    hx-swap="outerHTML"
+    hx-include="[name=unique_name]"
+  >
+    <input type="hidden" name="unique_name" value="{{ unique_name }}" />
+
+    <button type="submit" id="button" class="text-gray-500 hover:text-gray-700">
+      <i class="ri-thumb-up-line text-xl"></i> Like
+    </button>
+  </form>
+  <span id="like-count">{{ like_count }} likes</span>
+</div>
