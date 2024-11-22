@@ -17,7 +17,7 @@ from flask_socketio import emit
 from werkzeug.utils import secure_filename
 import os
 
-from .models import Like, Video, Comment
+from .models import Likes, Video, Comment
 import random
 from . import db
 from . import sock
@@ -131,11 +131,12 @@ def create_master_playlist(unique_name, output_dir: str, base_filename: str):
 
 @video.route("/watch/<string:unique_name>", methods=["GET"])
 def watch_video(unique_name):
-    likes = Like.query.filter_by(video_id=unique_name).all()
+    likes = Likes.query.filter_by(video_id=unique_name).all()
+    comments = Comment.query.filter_by(video_id=unique_name).all()
     like_count = len(likes)
     user_has_liked = any(like.user_id == current_user.id for like in likes)
     return render_template("watch.html", unique_name=unique_name, like_count=like_count, 
-                           user_has_liked=user_has_liked,)
+                           user_has_liked=user_has_liked,comments=comments)
 
 
 @video.route("/watch/<string:unique_name>/master.m3u8", methods=["GET"])

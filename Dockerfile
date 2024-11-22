@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install ffmpeg -y && apt-get install -y \
 WORKDIR /app
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-EXPOSE 8100
+RUN export FLASK_APP=myapp
 
-CMD ["python3", "run.py"]
+EXPOSE 8100
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+CMD ["/entrypoint.sh"]

@@ -21,11 +21,11 @@ class Video(db.Model):
         db.Integer, db.ForeignKey("user.id"), nullable=False
     )
     comments = db.relationship("Comment", backref="video", lazy=True)
-    likes = db.relationship("Like", backref="video", lazy=True)
+    likes = db.relationship("Likes", backref="video", lazy=True)
 
     def get_user_like(self):
         if current_user.is_authenticated:
-            return Like.query.filter_by(
+            return Likes.query.filter_by(
                 user_id=current_user.id, video_id=self.unique_name
             ).first()
         return None
@@ -47,7 +47,7 @@ class Comment(db.Model):
 
 
 @dataclass
-class Like(db.Model):
+class Likes(db.Model):
     id: Mapped[int] = db.Column(db.Integer, primary_key=True)
     like_type: Mapped[str] = db.Column(db.String(7), nullable=False)
     user_id: Mapped[int] = db.Column(
@@ -68,11 +68,11 @@ class Like(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email: Mapped[str] = db.Column(db.String(100), unique=True, nullable=False)
-    password: Mapped[str] = db.Column(db.String(100), nullable=False)
+    password: Mapped[str] = db.Column(db.String(1000), nullable=False)
     name: Mapped[str] = db.Column(db.String(1000))
     comments = db.relationship("Comment", backref="user", lazy=True)
     videos = db.relationship("Video", backref="User", lazy=True)
-    likes = db.relationship("Like", backref="User", lazy=True)
+    likes = db.relationship("Likes", backref="User", lazy=True)
 
     @staticmethod
     def is_valid_email(email):

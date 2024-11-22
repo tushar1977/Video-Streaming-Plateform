@@ -53,30 +53,11 @@
 
     <!-- Comments Section -->
     <div class="comment-section max-w-7xl mx-auto my-10 px-4">
-      <h2 class="text-2xl font-semibold mb-6">Comments</h2>
-
-      <!-- Comment Form -->
-      <form
-        class="comment-form mb-6"
-        action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
-        method="post"
+      <div
+        id="like-section"
+        class="w-auto flex flex-col items-end gap-2"
+        data-unique-name="{{ unique_name }}"
       >
-        <textarea
-          name="comments"
-          rows="4"
-          class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          placeholder="Add a comment..."
-        ></textarea>
-        <button
-          type="submit"
-          class="mt-2 m-2 px-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          Post Comment
-        </button>
-      </form>
-
-      <!-- Like Section -->
-      <div id="like-section" data-unique-name="{{ unique_name }}">
         <form
           hx-post="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
           hx-trigger="click"
@@ -99,6 +80,31 @@
         </form>
         <span id="like-count">{{ like_count }} likes</span>
       </div>
+      <h2 class="text-2xl font-semibold mb-6">Comments</h2>
+
+      <!-- Comment Form -->
+      <form
+        class="comment-form mb-6"
+        action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
+        method="POST"
+      >
+        <textarea
+          name="comments"
+          id="comments"
+          rows="4"
+          class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          placeholder="Add a comment..."
+        ></textarea>
+        <button
+          type="submit"
+          class="mt-2 m-2 px-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          Post Comment
+        </button>
+      </form>
+
+      <!-- Like Section -->
+
       <!-- Comment List -->
       <ul class="comment-list space-y-4">
         {% for c in comments %}

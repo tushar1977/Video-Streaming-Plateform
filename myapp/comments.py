@@ -1,7 +1,7 @@
 from flask.helpers import url_for
 from flask_login import current_user, login_required
 from flask_login.login_manager import flash
-from .models import User, Video, Comment, Like
+from .models import User, Video, Comment, Likes
 from flask import Blueprint, redirect, render_template, request
 from . import db
 
@@ -12,6 +12,7 @@ comm = Blueprint("comm", __name__)
 @login_required
 def upload_comment(unique_name):
     comment_text = request.form.get("comments")
+    print(comment_text)
     if comment_text:
         try:
             comment = Comment(

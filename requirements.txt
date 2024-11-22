@@ -21,6 +21,10 @@ Flask-Migrate==4.0.7
 Flask-SocketIO==5.3.6
 Flask-SQLAlchemy==3.1.1
 frozenlist==1.4.1
+sqlalchemy-cockroachdb
+cockroachdb
+psycopg2-binary
+gunicorn
 google-crc32c==1.5.0
 greenlet==3.0.3
 h11==0.14.0

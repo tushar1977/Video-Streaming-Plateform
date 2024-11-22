@@ -3,7 +3,7 @@ from flask_login import current_user, login_required
 from flask_login.login_manager import flash, redirect
 from sqlalchemy.sql.operators import like_op
 from . import db
-from .models import Like, Video
+from .models import Likes, Video
 
 like = Blueprint("like", __name__)
 
@@ -12,7 +12,7 @@ like = Blueprint("like", __name__)
 @login_required
 def like_action(like_action, unique_name):
     video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-    existing_like = Like.query.filter_by(
+    existing_like = Likes.query.filter_by(
         user_id=current_user.id, video_id=unique_name
     ).first()
 
@@ -23,7 +23,7 @@ def like_action(like_action, unique_name):
             db.session.delete(existing_like)
             liked = False
         else:
-            new_like = Like(
+            new_like = Likes(
                 user_id=current_user.id, video_id=unique_name, like_type="like"
             )
             db.session.add(new_like)
@@ -35,7 +35,7 @@ def like_action(like_action, unique_name):
 
     db.session.commit()
     
-    likes = Like.query.filter_by(video_id=unique_name).all()
+    likes = Likes.query.filter_by(video_id=unique_name).all()
     user_has_liked = any(like.user_id == current_user.id for like in likes)
     like_count = len(likes)
     
@@ -53,7 +53,7 @@ def get_likes(unique_name):
     video = Video.query.filter_by(unique_name=unique_name).first_or_404()
 
     # Query for likes based on unique_name
-    likes = Like.query.filter_by(video_id=unique_name).all()
+    likes = Likes.query.filter_by(video_id=unique_name).all()
     like_count = len(likes)
 
     # Check if the current user has liked the video
