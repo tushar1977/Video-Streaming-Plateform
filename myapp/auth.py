@@ -13,6 +13,9 @@ auth = Blueprint("auth", __name__)
 def signup():
     return render_template("signup.html")
 
+def hash_password(password) :
+        salt = bcrypt.gensalt(rounds=5)
+        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 @auth.route("/signup", methods=["POST"])
 def signup_post():
@@ -36,9 +39,8 @@ def signup_post():
         flash("Email already exist")
         return redirect(url_for("auth.signup"))
 
-    salt = bcrypt.gensalt(rounds=5)
-
-    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+    
+    hashed = hash_password(password)
 
     new_user = User(
         email=email,

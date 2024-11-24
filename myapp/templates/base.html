@@ -15,7 +15,7 @@
         <div class="flex justify-between items-center py-4">
           <div class="text-white text-lg font-bold">MyApp</div>
           <button
-            class="text-white md:hidden block focus:outline-none"
+            class="text-white sm:hidden block focus:outline-none"
             id="navbar-toggle"
           >
             <svg
@@ -33,7 +33,7 @@
               ></path>
             </svg>
           </button>
-          <div class="hidden md:flex space-x-4 text-white" id="navbar-menu">
+          <div class="hidden sm:flex space-x-4 text-white" id="navbar-menu">
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home.index') }}" class="hover:underline"
               >Home</a
@@ -57,7 +57,7 @@
             {% endif %}
           </div>
         </div>
-        <div class="md:hidden hidden" id="mobile-menu">
+        <div class="sm:hidden hidden" id="mobile-menu">
           <div class="space-y-2 text-white py-2">
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('home.index') }}" class="block">Home</a>
@@ -75,7 +75,7 @@
 
     <!-- Hero Content -->
     <div class="flex-grow flex items-center justify-center">
-      <div class="bg-white p-8 rounded-lg shadow-lg w-max>
+      <div class="bg-white p-8 rounded-lg shadow-lg w-max">
         {% block content %}{% endblock %}
       </div>
     </div>
