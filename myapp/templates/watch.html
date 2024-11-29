@@ -27,98 +27,155 @@
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body class="bg-gray-100 font-sans text-gray-800">
-    <!-- Video Section -->
-    <div
-      class="video-container max-w-7xl mx-40 mx-auto my-10 bg-black rounded-lg shadow-lg"
-    >
-      <video id="videoPlayer" controls class="w-full rounded-lg">
-        <source
-          src="{{ url_for('video.serve_hls', unique_name=unique_name, quality=current_quality) }}"
-          type="application/vnd.apple.mpegurl"
-        />
-        Your browser does not support the video tag.
-      </video>
-      <div class="quality-selector mt-4 text-center">
-        <label for="quality" class="text-white text-lg">Video Quality: </label>
-        <select
-          id="qualitySelector"
-          class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="480">480p</option>
-          <option value="720" selected>720p</option>
-          <option value="1080">1080p</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Comments Section -->
-    <div class="comment-section max-w-7xl mx-auto my-10 px-4">
-      <div
-        id="like-section"
-        class="w-auto flex flex-col items-end gap-2"
-        data-unique-name="{{ unique_name }}"
-      >
-        <form
-          hx-post="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
-          hx-trigger="click"
-          hx-target="#like-section"
-          hx-swap="outerHTML"
-          hx-include="[name=unique_name]"
-        >
-          <input type="hidden" name="unique_name" value="{{ unique_name }}" />
-
-          <button
-            type="submit"
-            id="button"
-            class="{{ 'text-blue-500' if user_has_liked else 'text-gray-500 hover:text-gray-700' }}"
+    <div class="max-w-7xl mx-auto px-4 py-8">
+      <!-- Video Section -->
+      <div class="video-container bg-black rounded-lg shadow-lg mb-6">
+        <video id="videoPlayer" controls class="w-full rounded-lg">
+          <source
+            src="{{ url_for('video.serve_hls', unique_name=unique_name, quality=current_quality) }}"
+            type="application/vnd.apple.mpegurl"
+          />
+          Your browser does not support the video tag.
+        </video>
+        <div class="quality-selector mt-4 text-center">
+          <label for="quality" class="text-white text-lg"
+            >Video Quality:
+          </label>
+          <select
+            id="qualitySelector"
+            class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
           >
-            <i
-              class="{{ 'ri-thumb-up-fill' if user_has_liked else 'ri-thumb-up-line' }} text-xl"
-            ></i>
-            {{ 'Liked' if user_has_liked else 'Like' }}
-          </button>
-        </form>
-        <span id="like-count">{{ like_count }} likes</span>
+            <option value="480">480p</option>
+            <option value="720" selected>720p</option>
+            <option value="1080">1080p</option>
+          </select>
+        </div>
       </div>
-      <h2 class="text-2xl font-semibold mb-6">Comments</h2>
 
-      <!-- Comment Form -->
-      <form
-        class="comment-form mb-6"
-        action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
-        method="POST"
-      >
-        <textarea
-          name="comments"
-          id="comments"
-          rows="4"
-          class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          placeholder="Add a comment..."
-        ></textarea>
-        <button
-          type="submit"
-          class="mt-2 m-2 px-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          Post Comment
-        </button>
-      </form>
+      <!-- Video Info Section -->
+      <div class="video-info bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h1 class="text-3xl font-bold mb-4">{{ video_title }}</h1>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex justify-end">
+            <div id="like-section" class="flex items-center mr-4">
+              <form
+                hx-post="{{ url_for('like.like_action', like_action='like', unique_name=unique_name) }}"
+                hx-trigger="click"
+                hx-target="#like-section"
+                hx-swap="outerHTML"
+                hx-include="[name=unique_name]"
+                class="flex items-center"
+              >
+                <input
+                  type="hidden"
+                  name="unique_name"
+                  value="{{ unique_name }}"
+                />
+                <button
+                  type="submit"
+                  class="flex items-center {{ 'text-blue-500' if user_has_liked else 'text-gray-500 hover:text-gray-700' }}"
+                >
+                  <i
+                    class="{{ 'ri-thumb-up-fill' if user_has_liked else 'ri-thumb-up-line' }} text-xl mr-2"
+                  ></i>
+                  <span id="like-count">{{ like_count }}</span>
+                </button>
+              </form>
+              <button
+                class="ml-2 flex items-center text-gray-500 hover:text-gray-700"
+              >
+                <i class="ri-thumb-down-line text-xl mr-2"></i>
+                <span>Dislike</span>
+              </button>
+            </div>
+            <button
+              class="flex items-center text-gray-500 hover:text-gray-700 mr-4"
+            >
+              <i class="ri-share-line text-xl mr-2"></i>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
 
-      <!-- Like Section -->
-
-      <!-- Comment List -->
-      <ul class="comment-list space-y-4">
-        {% for c in comments %}
-        <li class="comment-item p-4 bg-white rounded-lg shadow-sm">
-          <p>
-            <strong class="font-semibold">{{ c.user.name }}:</strong> {{ c.text
-            }}
+        <!-- Video Description -->
+        <div class="video-description bg-gray-100 rounded-lg p-4 mb-4">
+          <p class="text-sm">
+            <span class="font-semibold">Description views</span> •
           </p>
-          <small class="text-gray-500"
-            >Posted on: {{ c.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small
+          <div class="mt-2">{{ video_description.video_title }}</div>
+        </div>
+      </div>
+
+      <!-- Comments Section -->
+      <div class="comment-section">
+        <div class="comment-count mb-6">
+          <h3 class="text-xl font-semibold">{{ total_comments }} Comments</h3>
+        </div>
+
+        <!-- Comment Input -->
+        <div class="comment-input w-max flex mb-6">
+          <img
+            src="{{ current_user_avatar }}"
+            alt="{{ current_user_name }}"
+            class="w-10 h-10 rounded-full mr-4"
+          />
+          <form
+            class="comment-form"
+            action="{{ url_for('comm.upload_comment', unique_name=unique_name) }}"
+            method="POST"
           >
-        </li>
-        {% endfor %}
-      </ul>
+            <div class="relative">
+              <textarea
+                name="comments"
+                id="comments"
+                rows="2"
+                class="w-max p-4 pr-24 border border-gray-300 rounded-lg focus:border-blue-500 outline-none resize-none"
+                placeholder="Add a public comment..."
+              ></textarea>
+              <div class="absolute right-2 bottom-2 flex items-center">
+                <button
+                  type="submit"
+                  class="px-4 py-2 m-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 text-sm"
+                >
+                  Comment
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Comment List with Sorting -->
+        <ul class="comment-list space-y-4">
+          {% for c in comments %}
+          <li class="comment-item flex p-4 bg-white rounded-lg">
+            <img
+              src="{{ c.user.avatar }}"
+              alt="{{ c.user.name }}"
+              class="w-10 h-10 rounded-full mr-4"
+            />
+            <div class="flex-grow">
+              <div class="flex items-center mb-2">
+                <p class="font-semibold mr-2">{{ c.user.name }}</p>
+                <small class="text-gray-500">
+                  {{ c.created_at.strftime('%Y-%m-%d') }}
+                </small>
+              </div>
+              <p class="mb-2">{{ c.text }}</p>
+              <div class="flex items-center text-gray-500">
+                <button class="flex items-center mr-4">
+                  <i class="ri-thumb-up-line mr-2"></i>
+                  <span>{{ c.likes }}</span>
+                </button>
+                <button class="flex items-center">
+                  <i class="ri-thumb-down-line mr-2"></i>
+                </button>
+                <button class="ml-4">Reply</button>
+              </div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
 
     <script>
@@ -129,23 +186,26 @@
 
           const likeCountElement = document.getElementById("like-count");
           if (likeCountElement) {
-            likeCountElement.textContent = `${response.like_count} likes`;
+            likeCountElement.textContent = response.like_count;
           }
 
           const likeButton = event.target.querySelector("button");
           if (response.user_has_liked) {
             likeButton.innerHTML =
-              '<i class="ri-thumb-up-fill text-xl"></i> Liked';
+              '<i class="ri-thumb-up-fill text-xl mr-2"></i>' +
+              response.like_count;
             likeButton.classList.add("text-blue-500");
             likeButton.classList.remove("text-gray-500");
           } else {
             likeButton.innerHTML =
-              '<i class="ri-thumb-up-line text-xl"></i> Like';
+              '<i class="ri-thumb-up-line text-xl mr-2"></i>' +
+              response.like_count;
             likeButton.classList.add("text-gray-500");
             likeButton.classList.remove("text-blue-500");
           }
         }
       });
+
       const qualitySelector = document.getElementById("qualitySelector");
       const videoPlayer = document.getElementById("videoPlayer");
       const uniqueName = "{{ unique_name }}";
