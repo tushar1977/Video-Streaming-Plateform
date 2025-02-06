@@ -7,14 +7,14 @@ username = os.environ.get("DB_USERNAME")
 password = os.environ.get("DB_PASSWORD")
 hostname = os.environ.get("DB_HOSTNAME")
 database = os.environ.get("DB_NAME")
-port = os.environ.get("DB_PORT", 26257)  # Default to 3306 if not specified
+port = os.environ.get("DB_PORT", 3306)  # Default to 3306 if not specified
 
 
 class Config:
     SECRET_KEY = os.getenv("SECRET")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_DATABASE_URI = (
-        f"cockroachdb+psycopg2://{username}:{password}@{hostname}:{port}/{database}"
+        f"mysql+pymysql://{username}:{password}@{hostname}:{port}/{database}"
     )
     UPLOAD_FOLDER_IMAGE = os.path.join(os.getcwd(), "myapp", "static", "img")
     SEND_FILE_MAX_AGE_DEFAULT = 0

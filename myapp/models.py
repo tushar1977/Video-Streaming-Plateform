@@ -125,6 +125,5 @@ class User(UserMixin, db.Model):
         regex_pattern = rf"^[a-zA-Z0-9_.+-]+@({domain_pattern})$"
         return re.match(regex_pattern, email) is not None
 
-
     def check_password(self, password):
         return bcrypt.checkpw(password.encode("utf-8"), self.password.encode("utf-8"))
