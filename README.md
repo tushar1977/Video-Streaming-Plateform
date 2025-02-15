@@ -27,8 +27,12 @@ This project is a lightweight video streaming platform built with **Flask**. It 
 ## **Getting Started**
 
 Follow these steps to set up and run the platform locally. _(Soon to be deployed on a live server!)_
+### **1. First generate SSL certificates
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+```
 
-### **1. Clone the Repository**
+### **2. Clone the Repository**
 
 ```bash
 git clone https://github.com/tushar1977/Video-Streaming-Plateform
