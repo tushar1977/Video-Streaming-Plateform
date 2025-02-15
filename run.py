@@ -6,11 +6,6 @@ from flask_socketio import SocketIO
 app = create_app()
 
 if __name__ == "__main__":
-    sock.run(
-        app,
-        ssl_context=("./cert.pem", "./key.pem"),
-        host="0.0.0.0",
-        debug=True,
-        allow_unsafe_werkzeug=True,
-        port=int(os.getenv("PORT", 6000)),
-    )
+    gunicorn_app = app
+
+sock.init_app(app)

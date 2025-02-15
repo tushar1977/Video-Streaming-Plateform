@@ -10,4 +10,6 @@ export DB_NAME=$(cat /run/secrets/DB_NAME)
 export DB_PORT=$(cat /run/secrets/DB_PORT)
 
 # Start the application with Gunicorn
-exec python3 run.py
+exec gunicorn --certfile=cert.pem --keyfile=key.pem \
+  --worker-class eventlet -w 1 \
+  -b 0.0.0.0:${PORT} run:app
