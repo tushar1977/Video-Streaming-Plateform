@@ -1,0 +1,38 @@
+services:
+  app:
+    image: video_stream
+    deploy:
+      replicas: 1
+    ports:
+      - "8100:8100"
+    volumes:
+      - video_stream_statics:/app/myapp/static/
+    secrets:
+      - SECRET
+      - PORT
+      - DB_USERNAME
+      - DB_PASSWORD
+      - DB_HOSTNAME
+      - DB_NAME
+      - DB_PORT
+    entrypoint: ["/entrypoint.sh"]
+
+volumes:
+  video_stream_statics:
+    driver: local
+
+secrets:
+  SECRET:
+    external: true
+  PORT:
+    external: true
+  DB_USERNAME:
+    external: true
+  DB_PASSWORD:
+    external: true
+  DB_HOSTNAME:
+    external: true
+  DB_NAME:
+    external: true
+  DB_PORT:
+    external: true
