@@ -1,12 +1,14 @@
 services:
   app:
-    image: video_stream
+    image: tushar2005/video_streaming:latest
     deploy:
-      replicas: 1
+      replicas: 5
     ports:
       - "8100:8100"
     volumes:
-      - video_stream_statics:/app/myapp/static/
+      - video_stream_volume:/app/myapp/static/
+      - /var/my_cert/cert.pem:/app/cert.pem
+      - /var/my_cert/key.pem:/app/key.pem
     secrets:
       - SECRET
       - PORT
@@ -18,7 +20,7 @@ services:
     entrypoint: ["/entrypoint.sh"]
 
 volumes:
-  video_stream_statics:
+  video_stream_volume:
     driver: local
 
 secrets:

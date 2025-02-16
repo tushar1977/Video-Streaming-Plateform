@@ -1,5 +1,7 @@
 # Version control
 .git
+./deploy/
+deploy/
 .gitignore
 myapp/static
 # Python cache files
