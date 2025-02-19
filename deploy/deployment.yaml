@@ -1,64 +1,68 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: flask-app
-  labels:
-    app: flask-app
+  name: video-streaming
 spec:
-  replicas: 3
+  replicas: 5
   selector:
     matchLabels:
-      app: flask-app
+      app: video-streaming
   template:
     metadata:
       labels:
-        app: flask-app
+        app: video-streaming
     spec:
       containers:
-        - name: flask-app
-          image: tushar2005d/video_stream
+        - name: video-streaming
+          image: tushar2005/video_streaming
           ports:
-            - containerPort: 8000
-          env:
-            - name: FLASK_APP
-              value: "myapp"
-            - name: FLASK_ENV
-              value: "production"
-            - name: FLASK_DEBUG
-              value: "False"
-            - name: PORT
-              value: "8000"
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: flask-app-secrets
-                  key: DB_PASSWORD
-
+            - containerPort: 8100
           volumeMounts:
-            - name: db-initialized
-              mountPath: /app/db_initialized
-              subPath: db_initialized
+            - name: video-storage
+              mountPath: /app/myapp/static/
+            - name: tls-certs-volume
+              mountPath: /app/tls
+              readOnly: true
+          envFrom:
+            - secretRef:
+                name: video-streaming-secrets
+          command: ["/entrypoint.sh"]
       volumes:
-        - name: db-initialized
-          configMap:
-            name: db-initialized
+        - name: video-storage
+          persistentVolumeClaim:
+            claimName: video-stream-pvc
+        - name: tls-certs-volume
+          secret:
+            secretName: tls-secret
+            items:
+              - key: tls.crt
+                path: cert.pem
+              - key: tls.key
+                path: key.pem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: video-stream-pvc
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: flask-app-service
+  name: video-streaming-service
 spec:
   selector:
-    app: flask-app
+    app: video-streaming
   ports:
     - protocol: TCP
-      port: 7000
-      targetPort: 8000
+      port: 8100
+      targetPort: 8100
   type: LoadBalancer
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: db-initialized
-data:
-  db_initialized: "initialized"
