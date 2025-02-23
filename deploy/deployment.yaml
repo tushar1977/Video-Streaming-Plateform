@@ -2,6 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: video-streaming
+  annotations:
+    keel.sh/policy: force
+    keel.sh/trigger: poll
+    keel.sh/pollSchedule: "@every 1m"
 spec:
   replicas: 5
   selector:
@@ -14,7 +18,8 @@ spec:
     spec:
       containers:
         - name: video-streaming
-          image: tushar2005/video_streaming
+          image: tushar2005/video_streaming:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8100
           volumeMounts:

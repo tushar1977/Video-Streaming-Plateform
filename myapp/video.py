@@ -1,28 +1,22 @@
-import cv2
 from flask import (
     Blueprint,
-    Response,
     make_response,
     render_template,
     request,
     redirect,
-    send_file,
     send_from_directory,
     url_for,
     current_app,
 )
 from flask.helpers import flash
 from flask_login import login_required, current_user
-from flask_socketio import emit
 from werkzeug.utils import secure_filename
 import os
 
 from .models import Likes, Video, Comment
 import random
 from . import db
-from . import sock
 import string
-import re
 import subprocess
 from enum import Enum
 
@@ -79,7 +73,7 @@ def resize_video(input_path, output_path, width, height):
         "-b:v",
         "1200k",
         "-movflags",
-        "+faststart",  # Ensures moov atom is at the start for smooth playback
+        "+faststart",
         "-c:a",
         "aac",
         "-hls_time",
@@ -109,7 +103,7 @@ def get_bitrate_for_quality(quality: Video_Quality) -> int:
     return bitrate_map[quality]
 
 
-def create_master_playlist(unique_name, output_dir: str, base_filename: str):
+def create_master_playlist(unique_name, output_dir: str):
     master_content = "#EXTM3U\n#EXT-X-VERSION:3\n\n"
 
     for quality in Video_Quality:
@@ -135,9 +129,18 @@ def watch_video(unique_name):
     comments = Comment.query.filter_by(video_id=unique_name).all()
     video_description = Video.query.filter_by(unique_name=unique_name).first_or_404()
     like_count = len(likes)
-    user_has_liked = any(like.user_id == current_user.id for like in likes)
-    return render_template("watch.html", unique_name=unique_name, like_count=like_count, 
-                           user_has_liked=user_has_liked,comments=comments, video_description=video_description)
+
+    user_has_liked = False
+    if hasattr(current_user, "id"):
+        user_has_liked = any(like.user_id == current_user.id for like in likes)
+    return render_template(
+        "watch.html",
+        unique_name=unique_name,
+        like_count=like_count,
+        user_has_liked=user_has_liked,
+        comments=comments,
+        video_description=video_description,
+    )
 
 
 @video.route("/watch/<string:unique_name>/master.m3u8", methods=["GET"])
@@ -296,7 +299,7 @@ def upload():
             random.choice(string.ascii_letters + string.digits) for _ in range(8)
         )
 
-        create_master_playlist(unique_name, video_folder, base_filename)
+        create_master_playlist(unique_name, video_folder)
         new_video = Video(
             video_title=str(video_title),
             video_desc=str(video_desc),
