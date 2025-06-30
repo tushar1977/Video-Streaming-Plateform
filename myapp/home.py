@@ -17,6 +17,7 @@ def get_file_path(filename):
 @home.route("/", methods=["GET"])
 def index():
     videos = Video.query.all()
+    print(videos)
     video_data = []
     for video in videos:
         image_url = url_for("static", filename=f"img/{video.thumbnail_name}")

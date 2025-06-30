@@ -30,7 +30,7 @@ spec:
               readOnly: true
           envFrom:
             - secretRef:
-                name: video-streaming-secrets
+                name: video-stream-secret
           command: ["/entrypoint.sh"]
       volumes:
         - name: video-storage

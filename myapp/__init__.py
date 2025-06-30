@@ -16,10 +16,10 @@ sock = SocketIO()
 db = SQLAlchemy()
 
 
-def create_app():
+def create_app(config_class):
     app = Flask(__name__, static_url_path="/static")
 
-    app.config.from_object(conf)
+    app.config.from_object(config_class)
 
     os.makedirs(app.config["UPLOAD_FOLDER_VIDEO"], exist_ok=True)
     os.makedirs(app.config["UPLOAD_FOLDER_IMAGE"], exist_ok=True)

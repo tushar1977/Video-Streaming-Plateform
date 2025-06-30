@@ -1,14 +1,14 @@
 services:
   app:
-    image: tushar2005/video_streaming:latest
+    image: video_stream_local
     deploy:
-      replicas: 5
+      replicas: 3
     ports:
       - "8100:8100"
     volumes:
       - video_stream_volume:/app/myapp/static/
-      - /var/my_cert/cert.pem:/app/cert.pem
-      - /var/my_cert/key.pem:/app/key.pem
+      - /var/my_cert/cert.pem:/app/tls/cert.pem
+      - /var/my_cert/key.pem:/app/tls/key.pem
     secrets:
       - SECRET
       - PORT
