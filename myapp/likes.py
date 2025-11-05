@@ -1,55 +1,120 @@
-from flask import Blueprint, jsonify, render_template, request, url_for
-from flask_login import current_user, login_required
-from . import db
-from .models import Likes
+from flask import Blueprint, jsonify, request
+from flask_socketio import join_room, leave_room
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from bson import ObjectId
+from . import sock
+from .models import mongo
 
 like = Blueprint("like", __name__)
 
 
-@like.route("/like_action/<string:like_action>/<string:unique_name>", methods=["POST"])
-@login_required
-def like_action(like_action, unique_name):
-    existing_like = Likes.query.filter_by(
-        user_id=current_user.id, video_id=unique_name
-    ).first()
+@sock.on("join")
+def handle_join(data):
+    room = data.get("room")
+    if room:
+        join_room(room)
+        print(f"{request.sid} joined {room}")
 
-    if like_action == "like":
-        if existing_like:
-            db.session.delete(existing_like)
-        else:
-            new_like = Likes(
-                user_id=current_user.id, video_id=unique_name, like_type="like"
-            )
-            db.session.add(new_like)
+
+@sock.on("leave")
+def handle_leave(data):
+    room = data.get("room")
+    if room:
+        leave_room(room)
+        print(f"{request.sid} left {room}")
+
+
+@like.route("/like_action/like/<string:unique_name>", methods=["POST"])
+@jwt_required()
+def like_action(unique_name):
+    user_id = get_jwt_identity()
+
+    existing_like = mongo.db.likes.find_one(
+        {"user_id": ObjectId(user_id), "video_id": unique_name}
+    )
+
+    if existing_like:
+        mongo.db.likes.delete_one(
+            {"user_id": ObjectId(user_id), "video_id": unique_name}
+        )
     else:
-        if existing_like:
-            db.session.delete(existing_like)
+        mongo.db.likes.insert_one(
+            {"user_id": ObjectId(user_id), "video_id": unique_name}
+        )
+        mongo.db.dislikes.delete_one(
+            {"user_id": ObjectId(user_id), "video_id": unique_name}
+        )
 
-    db.session.commit()
-
-    likes = Likes.query.filter_by(video_id=unique_name).all()
-    user_has_liked = any(like.user_id == current_user.id for like in likes)
-    like_count = len(likes)
-
-    return render_template(
-        "like_section.html",
-        like_count=like_count,
-        user_has_liked=user_has_liked,
-        unique_name=unique_name,
+    like_count = mongo.db.likes.count_documents({"video_id": unique_name})
+    dislike_count = mongo.db.dislikes.count_documents({"video_id": unique_name})
+    user_has_liked = (
+        mongo.db.likes.find_one({"video_id": unique_name, "user_id": ObjectId(user_id)})
+        is not None
+    )
+    user_has_disliked = (
+        mongo.db.dislikes.find_one(
+            {"video_id": unique_name, "user_id": ObjectId(user_id)}
+        )
+        is not None
     )
 
+    update_data = {
+        "type": "like_update",
+        "video_id": unique_name,
+        "like_count": like_count,
+        "dislike_count": dislike_count,
+        "user_has_liked": user_has_liked,
+        "user_has_disliked": user_has_disliked,
+    }
 
-@like.route("/like_action/get_likes/<string:unique_name>", methods=["GET"])
-@login_required
-def get_likes(unique_name):
-    likes = Likes.query.filter_by(video_id=unique_name).all()
-    like_count = len(likes)
+    sock.emit("like_update", update_data, room=f"video_{unique_name}")
 
-    user_has_liked = any(like.user_id == current_user.id for like in likes)
+    return jsonify(update_data)
 
-    return render_template(
-        "like_section.html",
-        like_count=like_count,
-        user_has_liked=user_has_liked,
-        unique_name=unique_name,
+
+@like.route("/like_action/dislike/<string:unique_name>", methods=["POST"])
+@jwt_required()
+def dislike_action(unique_name):
+    user_id = get_jwt_identity()
+
+    existing_dislike = mongo.db.dislikes.find_one(
+        {"user_id": ObjectId(user_id), "video_id": unique_name}
     )
+
+    if existing_dislike:
+        mongo.db.dislikes.delete_one(
+            {"user_id": ObjectId(user_id), "video_id": unique_name}
+        )
+    else:
+        mongo.db.dislikes.insert_one(
+            {"user_id": ObjectId(user_id), "video_id": unique_name}
+        )
+        mongo.db.likes.delete_one(
+            {"user_id": ObjectId(user_id), "video_id": unique_name}
+        )
+
+    like_count = mongo.db.likes.count_documents({"video_id": unique_name})
+    dislike_count = mongo.db.dislikes.count_documents({"video_id": unique_name})
+    user_has_liked = (
+        mongo.db.likes.find_one({"video_id": unique_name, "user_id": ObjectId(user_id)})
+        is not None
+    )
+    user_has_disliked = (
+        mongo.db.dislikes.find_one(
+            {"video_id": unique_name, "user_id": ObjectId(user_id)}
+        )
+        is not None
+    )
+
+    update_data = {
+        "type": "like_update",
+        "video_id": unique_name,
+        "like_count": like_count,
+        "dislike_count": dislike_count,
+        "user_has_liked": user_has_liked,
+        "user_has_disliked": user_has_disliked,
+    }
+
+    sock.emit("like_update", update_data, room=f"video_{unique_name}")
+
+    return jsonify(update_data)

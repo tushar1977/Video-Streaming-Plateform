@@ -1,152 +1,100 @@
+import concurrent.futures
 from flask import (
     Blueprint,
+    abort,
+    jsonify,
     make_response,
-    render_template,
     request,
-    redirect,
     send_from_directory,
     url_for,
     current_app,
 )
-from flask.helpers import flash
-from flask_login import login_required, current_user
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended.utils import get_jwt_identity
+from flask_login import current_user
 from werkzeug.utils import secure_filename
 import os
 
-from .models import Likes, Video, Comment
+from myapp.uploadPipeline import (
+    Video_Quality,
+    create_master_playlist,
+    get_file_path,
+    get_video_path,
+    resize_video,
+)
+
 import random
-from . import db
+from . import mongo
 import string
-import subprocess
-from enum import Enum
 
 video = Blueprint("video", __name__)
 
 
-class Video_Quality(Enum):
-    Q480 = [854, 480]
-    Q720 = [1280, 720]
-    Q1080 = [1920, 1080]
-
-
-def get_chunk(file_path, byte1=None, byte2=None):
-    file_size = os.stat(file_path).st_size
-    start = 0 if byte1 is None else byte1
-    end = file_size - 1 if byte2 is None else byte2
-    length = end - start + 1
-
-    with open(file_path, "rb") as f:
-        f.seek(start)
-        chunk = f.read(length)
-
-    return chunk, start, end, file_size
-
-
-def get_file_path(
-    filename,
-    quality,
-):
-    upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
-    return os.path.join(upload_folder, filename, f"Q{quality}@{filename}", "hls")
-
-
-def get_video_path(
-    filename,
-):
-    upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
-    return os.path.join(upload_folder, filename)
-
-
-def resize_video(input_path, output_path, width, height):
-    segment_dir = os.path.dirname(output_path)
-    os.makedirs(segment_dir, exist_ok=True)
-    command = [
-        "ffmpeg",
-        "-i",
-        input_path,
-        "-vf",
-        f"scale={width}:{height}",
-        "-c:v",
-        "libx264",
-        "-crf",
-        "30",
-        "-b:v",
-        "1200k",
-        "-movflags",
-        "+faststart",
-        "-c:a",
-        "aac",
-        "-hls_time",
-        "4",
-        "-hls_playlist_type",
-        "vod",
-        "-hls_segment_filename",
-        os.path.join(segment_dir, "segment_%03d.ts"),
-        "-hls_flags",
-        "independent_segments",
-        "-f",
-        "hls",
-        "-y",
-        output_path,
-    ]
-    result = subprocess.run(command, check=True, capture_output=True, text=True)
-    print(result.stdout)
-
-
-def get_bitrate_for_quality(quality: Video_Quality) -> int:
-    """Calculate appropriate bitrate for each quality"""
-    bitrate_map = {
-        Video_Quality.Q480: 1000,  # 1000k for 480p
-        Video_Quality.Q720: 2500,  # 2500k for 720p
-        Video_Quality.Q1080: 5000,  # 5000k for 1080p
-    }
-    return bitrate_map[quality]
-
-
-def create_master_playlist(unique_name, output_dir: str):
-    master_content = "#EXTM3U\n#EXT-X-VERSION:3\n\n"
-
-    for quality in Video_Quality:
-        width, height = quality.value
-        bitrate = get_bitrate_for_quality(quality)
-
-        quality_url = f"/watch/{unique_name}/{quality.name}.m3u8"
-
-        total_bandwidth = (bitrate + 128) * 1000
-        master_content += f'#EXT-X-STREAM-INF:BANDWIDTH={total_bandwidth},RESOLUTION={width}x{height},CODECS="avc1.64001f,mp4a.40.2"\n'
-        master_content += f"{quality_url}\n\n"
-
-    master_path = os.path.join(output_dir, "master.m3u8")
-    with open(master_path, "w") as f:
-        f.write(master_content)
-
-    return master_path
-
-
-@video.route("/watch/<string:unique_name>", methods=["GET"])
-def watch_video(unique_name):
-    likes = Likes.query.filter_by(video_id=unique_name).all()
-    comments = Comment.query.filter_by(video_id=unique_name).all()
-    video_description = Video.query.filter_by(unique_name=unique_name).first_or_404()
+# -------------------------------
+# Serve video metadata
+# -------------------------------
+@video.route("/api/video/<string:unique_name>", methods=["GET"])
+def get_video_data(unique_name):
+    video_description = mongo.db.videos.find_one({"unique_name": unique_name})
+    if not video_description:
+        abort(404)
+    likes = list(mongo.db.likes.find({"video_id": unique_name}))
+    comments = list(mongo.db.comments.find({"video_id": unique_name}))
     like_count = len(likes)
 
     user_has_liked = False
-    if hasattr(current_user, "id"):
-        user_has_liked = any(like.user_id == current_user.id for like in likes)
-    return render_template(
-        "watch.html",
-        unique_name=unique_name,
-        like_count=like_count,
-        user_has_liked=user_has_liked,
-        comments=comments,
-        video_description=video_description,
+    current_user_avatar = None
+    current_user_name = None
+
+    if hasattr(current_user, "_id"):
+        user_has_liked = any(like.get("user_id") == current_user._id for like in likes)
+        current_user_avatar = getattr(current_user, "avatar", None)
+        current_user_name = getattr(current_user, "name", None)
+
+    a = jsonify(
+        {
+            "unique_name": unique_name,
+            "like_count": like_count,
+            "user_has_liked": user_has_liked,
+            "comments": [
+                {
+                    "id": str(c.get("_id", "")),
+                    "user": {
+                        "name": c.get("user", {}).get("name", "Anonymous"),
+                        "avatar": c.get("user", {}).get(
+                            "avatar", "/placeholder.svg?height=40&width=40"
+                        ),
+                    },
+                    "text": c.get("text", ""),
+                    "likes": c.get("likes", 0),
+                    "created_at": (
+                        c.get("created_at", "").isoformat()
+                        if hasattr(c.get("created_at"), "isoformat")
+                        else str(c.get("created_at", ""))
+                    ),
+                }
+                for c in comments
+            ],
+            "video_title": video_description.get("title", ""),
+            "video_description": video_description.get("description", ""),
+            "current_user_avatar": current_user_avatar,
+            "current_user_name": current_user_name,
+            "total_comments": len(comments),
+        }
     )
+    return a
 
 
+# -------------------------------
+# Serve master manifest
+# -------------------------------
 @video.route("/watch/<string:unique_name>/master.m3u8", methods=["GET"])
 def serve_hls(unique_name):
-    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-    master_path = get_video_path(video.file_name)
+    video = mongo.db.videos.find_one({"unique_name": unique_name})
+    if not video:
+        abort(404)
+
+    master_path = get_video_path(video["file_name"])
     master_manifest_path = os.path.join(master_path, "master.m3u8")
     print(master_manifest_path)
 
@@ -161,15 +109,22 @@ def serve_hls(unique_name):
                 "Access-Control-Allow-Origin": "*",
             }
         )
+        print(response)
         return response
 
     return "Master manifest not found", 404
 
 
+# -------------------------------
+# Serve specific quality playlist
+# -------------------------------
 @video.route("/watch/<string:unique_name>/Q<string:quality>.m3u8", methods=["GET"])
 def serve_quality_playlist(unique_name, quality):
-    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-    video_path = get_file_path(video.file_name, quality)
+    video_doc = mongo.db.videos.find_one({"unique_name": unique_name})
+    if not video_doc:
+        abort(404)
+
+    video_path = get_file_path(video_doc["file_name"], quality)
     manifest_path = os.path.join(video_path, "stream.m3u8")
 
     if os.path.isfile(manifest_path):
@@ -197,6 +152,9 @@ def serve_quality_playlist(unique_name, quality):
     return "Quality manifest not found", 404
 
 
+# -------------------------------
+# Serve TS video segment
+# -------------------------------
 @video.route("/stream/<string:unique_name>/segment", methods=["GET"])
 def serve_segment(unique_name):
     quality = request.args.get("quality")
@@ -205,8 +163,11 @@ def serve_segment(unique_name):
     if not segment:
         return "Segment parameter required", 400
 
-    video = Video.query.filter_by(unique_name=unique_name).first_or_404()
-    video_path = get_file_path(video.file_name, quality)
+    video_doc = mongo.db.videos.find_one({"unique_name": unique_name})
+    if not video_doc:
+        abort(404)
+
+    video_path = get_file_path(video_doc["file_name"], quality)
     segment_path = os.path.join(video_path, segment)
 
     if os.path.isfile(segment_path):
@@ -223,32 +184,33 @@ def serve_segment(unique_name):
     return "Segment not found", 404
 
 
-@video.route("/upload", methods=["GET", "POST"])
-@login_required
+# -------------------------------
+# Video Upload Route
+# -------------------------------
+@video.route("/upload", methods=["POST"])
+@jwt_required()
 def upload():
-    if request.method == "POST":
+    try:
+        user_id = get_jwt_identity()
         video_title = request.form.get("video_title")
         video_desc = request.form.get("video_desc")
         thumbnail = request.files.get("img")
         file = request.files.get("file")
 
         if not file or not thumbnail:
-            flash("No file or thumbnail selected")
-            return redirect(url_for("video.upload"))
+            return jsonify({"error": "No file or thumbnail selected"}), 400
 
-        filename = secure_filename(str(file.filename))
-        imgname = secure_filename(str(thumbnail.filename))
+        filename = secure_filename(file.filename)
+        imgname = secure_filename(thumbnail.filename)
         if not filename or not imgname:
-            flash("File name or thumbnail name is empty")
-            return redirect(url_for("video.upload"))
+            return jsonify({"error": "File name or thumbnail name is empty"}), 400
 
         file_ext = os.path.splitext(filename)[1].lower()
         img_ext = os.path.splitext(imgname)[1].lower()
         allowed_extensions = current_app.config["UPLOAD_EXTENSIONS"]
 
         if file_ext not in allowed_extensions or img_ext not in allowed_extensions:
-            flash("Invalid file extension")
-            return redirect(url_for("video.upload"))
+            return jsonify({"error": "Invalid file extension"}), 400
 
         base_filename = os.path.splitext(filename)[0]
         video_folder = os.path.join(
@@ -260,63 +222,84 @@ def upload():
         file.save(original_path)
 
         processing_failed = False
-        processed_files = []
+        futures = []
 
-        for q in Video_Quality:
-            quality_path = os.path.join(video_folder, f"{q.name}@{base_filename}")
-            hls_folder = os.path.join(quality_path, "hls")
-            os.makedirs(hls_folder, exist_ok=True)
-            final_path = os.path.join(hls_folder, "stream.m3u8")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            for q in Video_Quality:
+                quality_path = os.path.join(video_folder, f"{q.name}@{base_filename}")
+                hls_folder = os.path.join(quality_path, "hls")
+                os.makedirs(hls_folder, exist_ok=True)
+                final_path = os.path.join(hls_folder, "stream.m3u8")
 
-            try:
-                resize_video(original_path, final_path, q.value[0], q.value[1])
-            except Exception as e:
-                flash(f"Video processing failed for {q.name}")
-                processing_failed = True
-                break
+                future = executor.submit(
+                    resize_video,
+                    original_path,
+                    final_path,
+                    q.value[0],
+                    q.value[1],
+                    True,
+                )
+                futures.append((future, quality_path))
+
+            for future, quality_path in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Error: {e}")
+                    processing_failed = True
+                    break
+
         os.remove(original_path)
+
         if processing_failed:
-            if os.path.exists(original_path):
-                os.remove(original_path)
-            for processed_file in processed_files:
-                if os.path.exists(processed_file):
-                    os.remove(processed_file)
-            return redirect(url_for("video.upload"))
+            for _, quality_path in futures:
+                if os.path.exists(quality_path):
+                    try:
+                        os.remove(quality_path)
+                    except Exception:
+                        pass
+            return jsonify({"error": "Video processing failed"}), 500
+
         thumbnail_path = os.path.join(
             current_app.config["UPLOAD_FOLDER_IMAGE"], imgname
         )
         try:
             thumbnail.save(thumbnail_path)
-        except Exception as e:
-            flash("Thumbnail saving failed")
+        except Exception:
             for q in Video_Quality:
                 quality_path = os.path.join(video_folder, f"{q.name}@{filename}")
                 if os.path.exists(quality_path):
                     os.remove(quality_path)
-            return redirect(url_for("video.upload"))
+            return jsonify({"error": "Thumbnail saving failed"}), 500
 
         unique_name = "".join(
             random.choice(string.ascii_letters + string.digits) for _ in range(8)
         )
 
         create_master_playlist(unique_name, video_folder)
-        new_video = Video(
-            video_title=str(video_title),
-            video_desc=str(video_desc),
-            file_name=base_filename,
-            thumbnail_name=imgname,
-            user_id=current_user.id,
-            unique_name=unique_name,
+
+        video_doc = {
+            "video_title": video_title,
+            "video_desc": video_desc,
+            "file_name": base_filename,
+            "thumbnail_name": imgname,
+            "user_id": user_id,
+            "unique_name": unique_name,
+        }
+
+        mongo.db.videos.insert_one(video_doc)
+
+        return (
+            jsonify(
+                {
+                    "message": "Upload successful",
+                    "video_id": unique_name,
+                    "redirect_url": url_for("home.profile"),
+                }
+            ),
+            200,
         )
 
-        try:
-            db.session.add(new_video)
-            db.session.commit()
-            flash("Upload successful")
-            return redirect(url_for("home.profile", video_id=new_video.unique_name))
-        except Exception as e:
-            flash("Error saving video details to database")
-            print(f"Database error: {e}")
-            return "Internal server error", 500
-
-    return render_template("upload.html")
+    except Exception as e:
+        print(f"Upload error: {e}")
+        return jsonify({"error": "Internal server error"}), 500

@@ -1,82 +1,97 @@
-from flask import Blueprint, flash, render_template, request
-from flask.helpers import url_for
-from werkzeug.utils import redirect
-from . import db
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended.utils import create_access_token, unset_jwt_cookies
+from . import mongo
 from .models import User
+from myapp.utils.checkPass import hash_password
 import bcrypt
-from flask_login import login_user, logout_user
 
 auth = Blueprint("auth", __name__)
 
 
-@auth.route("/signup")
-def signup():
-    return render_template("signup.html")
-
-def hash_password(password) :
-        salt = bcrypt.gensalt(rounds=5)
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
-
 @auth.route("/signup", methods=["POST"])
 def signup_post():
-    # code to validate and add user to database goes here
-    email = request.form.get("email")
-
-    if not User.is_valid_email(email):
-        flash("Not Valid Email")
-        return redirect(url_for("auth.signup"))
-
-    name = request.form.get("name")
-    password = request.form.get("password")
-
-    if len(password) <= 6:
-        flash("Password should be greater than 6 characters")
+    data = request.get_json()
+    email = data.get("email")
+    name = data.get("name")
+    password = data.get("password")
 
     if not email or not password or not name:
-        flash("Email and password are required")
-    user = User.query.filter_by(email=email).first()
-    if user:
-        flash("Email already exist")
-        return redirect(url_for("auth.signup"))
+        return (
+            jsonify(
+                {"success": False, "message": "Email, name, and password are required."}
+            ),
+            400,
+        )
 
-    
-    hashed = hash_password(password)
+    existing_user = mongo.db.users.find_one({"email": email})
+    if existing_user:
+        return jsonify({"success": False, "message": "Email already exists."}), 400
 
-    new_user = User(
-        email=email,
-        name=name,
-        password=hashed,
+    hashed_pw = hash_password(password)
+    result = mongo.db.users.insert_one(
+        {
+            "email": email,
+            "name": name,
+            "password": hashed_pw,
+        }
     )
-    db.session.add(new_user)
-    db.session.commit()
 
-    return redirect(url_for("auth.login"))
+    user = User(
+        _id=str(result.inserted_id),
+        email=email,
+        password=hashed_pw,
+        name=name,
+    )
+    access_token = create_access_token(identity=str(user._id))
 
-
-@auth.route("/login")
-def login():
-    return render_template("login.html")
+    return (
+        jsonify(
+            {
+                "success": True,
+                "message": "Account created successfully!",
+                "user": {"id": str(user._id), "name": user.name, "email": user.email},
+                "access_token": access_token,
+            }
+        ),
+        201,
+    )
 
 
 @auth.route("/login", methods=["POST"])
 def login_check():
-    email = request.form.get("email")
-    password = request.form.get("password")
-    remember = True if request.form.get("remember") else False
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+
+    user_data = mongo.db.users.find_one({"email": email})
+    if not user_data:
+        return jsonify({"success": False, "message": "Invalid email or password."}), 401
+
+    if not bcrypt.checkpw(
+        password.encode("utf-8"), user_data["password"].encode("utf-8")
+    ):
+        return jsonify({"success": False, "message": "Invalid email or password."}), 401
+
+    user = User(
+        _id=str(user_data["_id"]),
+        email=user_data["email"],
+        password=user_data["password"],
+        name=user_data.get("name"),
+    )
+
+    access_token = create_access_token(identity=str(user._id))
+    return jsonify(
+        {
+            "success": True,
+            "message": "Login successful!",
+            "user": {"id": str(user._id), "name": user.name, "email": user.email},
+            "access_token": access_token,
+        }
+    )
 
 
-    user = User.query.filter_by(email=email).first()
-
-    if not user or not user.check_password(password):
-        flash("Please check your login details and try again.")
-        return redirect(url_for("auth.login"))
-
-    login_user(user, remember=remember)
-    return redirect(url_for("home.index"))
-
-
-@auth.route("/logout")
+@auth.route("/logout", methods=["POST"])
 def logout():
-    logout_user()
-
-    return redirect(url_for("auth.login"))
+    response = jsonify({"msg": "logout successful"})
+    unset_jwt_cookies(response)
+    return response

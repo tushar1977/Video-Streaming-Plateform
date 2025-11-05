@@ -2,15 +2,30 @@ import os
 from myapp import create_app, sock
 from myapp.config import DevelopmentConfig, ProductionConfig
 
-env = os.environ.get("FLASK_ENV", "development")
+env = os.environ.get("FLASK_ENV")
 
 if env == "production":
     app = create_app(ProductionConfig)
-    gunicorn_app = app
 else:
     app = create_app(DevelopmentConfig)
 
-sock.init_app(app)
 
-if __name__ == "__main__" and env != "production":
-    app.run(debug=True, port=3000)
+if __name__ == "__main__":
+    env = os.environ.get("FLASK_ENV", "development").lower()
+    if env == "production":
+        print(" Running in production mode")
+    else:
+        print(" Running in Development mode")
+        host = os.environ.get("FLASK_HOST", "0.0.0.0")
+        port = int(os.environ.get("FLASK_PORT", 3000))
+        debug = os.environ.get("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
+
+        sock.run(
+            app=app,
+            host=host,
+            port=port,
+            debug=debug,
+            use_reloader=debug,
+            keyfile="./.certs/localhost+2-key.pem",
+            certfile="./.certs/localhost+2.pem",
+        )

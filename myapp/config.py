@@ -1,26 +1,25 @@
+from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-port = os.environ.get("DB_PORT", 3306)  # Default to 3306 if not specified
-
 
 class Config:
     SECRET_KEY = os.getenv("SECRET")
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_DATABASE_URI = os.environ.get("URL")
+    MONGO_URI = os.environ.get("URL")
     UPLOAD_FOLDER_IMAGE = os.path.join(os.getcwd(), "myapp", "static", "img")
-    SEND_FILE_MAX_AGE_DEFAULT = 0
 
-    MAIL_PORT = 587
-    MAIL_SERVER = "smtp.google.com"
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_size": 10,
-        "max_overflow": 20,
-        "pool_timeout": 30,
-        "pool_recycle": 1800,
-    }
+    JWT_SECRET_KEY = "ffff"
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
+
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "None"
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
+    SESSION_REFRESH_EACH_REQUEST = False
+    SESSION_COOKIE_DOMAIN = None
+
     UPLOAD_FOLDER_VIDEO = os.path.join(os.getcwd(), "myapp", "static", "video")
     UPLOAD_EXTENSIONS = [
         ".mp4",
@@ -34,6 +33,7 @@ class Config:
 
 class ProductionConfig(Config):
     DEBUG = False
+    SESSION_COOKIE_SECURE = True
 
 
 class DevelopmentConfig(Config):
