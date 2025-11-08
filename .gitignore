@@ -11,3 +11,4 @@ backend/.env
 backend/myapp/static
 frontend/node_modules
 frontend/build
+.env
