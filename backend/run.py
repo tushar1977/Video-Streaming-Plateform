@@ -26,6 +26,6 @@ if __name__ == "__main__":
             port=port,
             debug=debug,
             use_reloader=debug,
-            keyfile="./.certs/localhost+2-key.pem",
-            certfile="./.certs/localhost+2.pem",
+            keyfile="../.certs/example.com+5-key.pem",
+            certfile="../.certs/example.com+5.pem",
         )

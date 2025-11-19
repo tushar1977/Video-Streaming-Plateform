@@ -38,6 +38,7 @@ def index():
             thumbnail_path = os.path.join(
                 current_app.static_folder, "img", thumbnail_name
             )
+            print(thumbnail_path)
             if not os.path.exists(thumbnail_path):
                 continue
 

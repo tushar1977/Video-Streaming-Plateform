@@ -1,4 +1,5 @@
 import logging
+from celery import Celery
 from bson import ObjectId
 from flask import Flask, jsonify
 import os
@@ -19,6 +20,7 @@ sock = SocketIO()
 mongo = PyMongo()
 cors = CORS()
 jwt = JWTManager()
+cel = Celery()
 
 
 def create_app(config_class):
@@ -52,6 +54,7 @@ def create_app(config_class):
             "https://localhost:3001",
             "http://192.168.1.211:3001",
             "https://192.168.1.211:3001",
+            "https://192.168.1.132:3001",
         ],
         allow_headers=[
             "Content-Type",

@@ -36,7 +36,7 @@ export default function AuthForm() {
       let result
 
       if (isSignUp) {
-        result = await signup(email, password, name || email.split("@")[0])
+        result = await signup(name, email || email.split("@")[0], password)
       } else {
         result = await login(email, password)
       }

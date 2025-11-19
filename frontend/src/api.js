@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://127.0.0.1:3000';
+const API_BASE_URL = 'https://192.168.1.132:3000';
 
 export const AUTH_ENDPOINTS = {
   login: `${API_BASE_URL}/auth/login`,

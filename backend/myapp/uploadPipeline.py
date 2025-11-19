@@ -43,21 +43,16 @@ def resize_video(input_path, output_path, width, height, show_logs):
     os.makedirs(segment_dir, exist_ok=True)
     segment_pattern = os.path.join(segment_dir, "segment_%03d.ts")
 
+    probe = ffmpeg.probe(input_path)
+    has_audio = any(stream["codec_type"] == "audio" for stream in probe["streams"])
+
     inp = ffmpeg.input(input_path)
     v = inp.video.filter("scale", width, height)
-    a = inp.audio
 
-    out = ffmpeg.output(
-        v,
-        a,
-        output_path,
+    output_args = dict(
         vcodec="libx264",
         crf=30,
         video_bitrate="1200k",
-        acodec="aac",
-        audio_bitrate="128k",
-        ac=2,
-        ar=48000,
         f="hls",
         hls_time=4,
         hls_playlist_type="vod",
@@ -66,12 +61,28 @@ def resize_video(input_path, output_path, width, height, show_logs):
         movflags="+faststart",
         threads=15,
     )
+
+    if has_audio:
+        output_args.update(
+            {
+                "acodec": "aac",
+                "audio_bitrate": "128k",
+                "ac": 2,
+                "ar": 48000,
+            }
+        )
+        out = ffmpeg.output(v, inp.audio, output_path, **output_args)
+    else:
+        out = ffmpeg.output(v, output_path, **output_args)
+
     out = out.overwrite_output()
 
+    # Run
     if show_logs:
         out.run()
     else:
         out.run(quiet=True, capture_stdout=True, capture_stderr=True)
+
     print(f"Video resized and saved as HLS at: {output_path}")
 
 
