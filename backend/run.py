@@ -1,6 +1,5 @@
 import os
 from myapp import create_app, sock
-from myapp.config import DevelopmentConfig, ProductionConfig
 
 env = os.environ.get("FLASK_ENV")
 
@@ -21,7 +20,7 @@ if __name__ == "__main__":
             app=app,
             host=host,
             port=port,
-            debug=False,
+            debug=True,
             use_reloader=debug,
             keyfile="../.certs/example.com+5-key.pem",
             certfile="../.certs/example.com+5.pem",

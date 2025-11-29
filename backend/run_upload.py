@@ -20,7 +20,7 @@ if __name__ == "__main__":
             app=app,
             host=host,
             port=port,
-            debug=False,
+            debug=True,
             use_reloader=debug,
             keyfile="../.certs/example.com+5-key.pem",
             certfile="../.certs/example.com+5.pem",
