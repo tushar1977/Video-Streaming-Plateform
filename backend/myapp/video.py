@@ -1,4 +1,6 @@
-import concurrent.futures
+import requests
+import json
+from myapp.rabbitmq import VideoQueueManager
 from flask import (
     Blueprint,
     abort,
@@ -6,7 +8,6 @@ from flask import (
     make_response,
     request,
     send_from_directory,
-    url_for,
     current_app,
 )
 from flask_jwt_extended import jwt_required
@@ -16,18 +17,17 @@ from werkzeug.utils import secure_filename
 import os
 
 from myapp.uploadPipeline import (
-    Video_Quality,
-    create_master_playlist,
     get_file_path,
     get_video_path,
-    resize_video,
 )
+from uploadPipeline.rabbitmq import createChannel
 
-import random
 from . import mongo
-import string
+from . import sock
 
 video = Blueprint("video", __name__)
+
+queue_manager = VideoQueueManager()
 
 
 # -------------------------------
@@ -184,122 +184,100 @@ def serve_segment(unique_name):
     return "Segment not found", 404
 
 
-# -------------------------------
-# Video Upload Route
-# -------------------------------
+URL = "https://192.168.1.132:3002/upload"
+
+
+@video.route("/ping", methods=["GET"])
+def test():
+    resp = requests.get(URL, verify=False)
+    return jsonify(resp.json())
+
+
 @video.route("/upload", methods=["POST"])
 @jwt_required()
 def upload():
     try:
         user_id = get_jwt_identity()
+        jwt_token = request.headers.get("Authorization")
+
         video_title = request.form.get("video_title")
         video_desc = request.form.get("video_desc")
         thumbnail = request.files.get("img")
         file = request.files.get("file")
 
         if not file or not thumbnail:
-            return jsonify({"error": "No file or thumbnail selected"}), 400
+            return jsonify({"error": "Video file and thumbnail are required"}), 400
 
         filename = secure_filename(file.filename)
         imgname = secure_filename(thumbnail.filename)
+
         if not filename or not imgname:
-            return jsonify({"error": "File name or thumbnail name is empty"}), 400
+            return jsonify({"error": "Invalid filename"}), 400
+
+        allowed_ext = current_app.config["UPLOAD_EXTENSIONS"]
 
         file_ext = os.path.splitext(filename)[1].lower()
         img_ext = os.path.splitext(imgname)[1].lower()
-        allowed_extensions = current_app.config["UPLOAD_EXTENSIONS"]
 
-        if file_ext not in allowed_extensions or img_ext not in allowed_extensions:
+        if file_ext not in allowed_ext or img_ext not in allowed_ext:
             return jsonify({"error": "Invalid file extension"}), 400
 
-        base_filename = os.path.splitext(filename)[0]
-        video_folder = os.path.join(
-            current_app.config["UPLOAD_FOLDER_VIDEO"], base_filename
-        )
-        os.makedirs(video_folder, exist_ok=True)
+        base_name = os.path.splitext(filename)[0]
 
-        original_path = os.path.join(video_folder, f"original_{filename}")
-        file.save(original_path)
+        video_dir = os.path.join(current_app.config["UPLOAD_FOLDER_VIDEO"], base_name)
+        thumb_dir = current_app.config["UPLOAD_FOLDER_IMAGE"]
 
-        processing_failed = False
-        futures = []
+        os.makedirs(video_dir, exist_ok=True)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            for q in Video_Quality:
-                quality_path = os.path.join(video_folder, f"{q.name}@{base_filename}")
-                hls_folder = os.path.join(quality_path, "hls")
-                os.makedirs(hls_folder, exist_ok=True)
-                final_path = os.path.join(hls_folder, "stream.m3u8")
+        video_path = os.path.join(video_dir, f"original_{filename}")
+        thumb_path = os.path.join(thumb_dir, imgname)
 
-                future = executor.submit(
-                    resize_video,
-                    original_path,
-                    final_path,
-                    q.value[0],
-                    q.value[1],
-                    True,
-                )
-                futures.append((future, quality_path))
+        file.save(video_path)
+        thumbnail.save(thumb_path)
 
-            for future, quality_path in futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"Error: {e}")
-                    processing_failed = True
-                    break
-
-        os.remove(original_path)
-
-        if processing_failed:
-            for _, quality_path in futures:
-                if os.path.exists(quality_path):
-                    try:
-                        os.remove(quality_path)
-                    except Exception:
-                        pass
-            return jsonify({"error": "Video processing failed"}), 500
-
-        thumbnail_path = os.path.join(
-            current_app.config["UPLOAD_FOLDER_IMAGE"], imgname
-        )
-        try:
-            thumbnail.save(thumbnail_path)
-        except Exception:
-            for q in Video_Quality:
-                quality_path = os.path.join(video_folder, f"{q.name}@{filename}")
-                if os.path.exists(quality_path):
-                    os.remove(quality_path)
-            return jsonify({"error": "Thumbnail saving failed"}), 500
-
-        unique_name = "".join(
-            random.choice(string.ascii_letters + string.digits) for _ in range(8)
-        )
-
-        create_master_playlist(unique_name, video_folder)
-
-        video_doc = {
+        message_payload = {
+            "user_id": user_id,
+            "jwt_token": jwt_token,
             "video_title": video_title,
             "video_desc": video_desc,
-            "file_name": base_filename,
-            "thumbnail_name": imgname,
-            "user_id": user_id,
-            "unique_name": unique_name,
+            "video_path": video_path,
+            "thumbnail_path": thumb_path,
+            "base_name": base_name,
         }
 
-        mongo.db.videos.insert_one(video_doc)
+        job_id = queue_manager.push_video(message_payload)
+        queue_stats = queue_manager.get_queue_size()
 
-        return (
-            jsonify(
-                {
-                    "message": "Upload successful",
-                    "video_id": unique_name,
-                    "redirect_url": url_for("home.profile"),
-                }
-            ),
-            200,
-        )
+        print(f"[✓] Video '{base_name}' queued. Job: {job_id}, User: {user_id}")
+        print(f"[QUEUE] Pending jobs: {queue_stats}")
+
+        return jsonify(
+            {
+                "message": "Upload queued successfully",
+                "status": "processing",
+                "video_title": video_title,
+                "queued": True,
+            }
+        ), 200
 
     except Exception as e:
-        print(f"Upload error: {e}")
+        print(f"[UPLOAD ERROR] {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+def consume_status_queue():
+    channel = createChannel()
+
+    def callback(ch, method, properties, body):
+        try:
+            data = json.loads(body)
+            sock.emit("send_updates", data, room=f"userId_{data['user_id']}")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception as e:
+            print(e)
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    channel.basic_consume(
+        queue="status_updates", on_message_callback=callback, auto_ack=False
+    )
+    channel.start_consuming()

@@ -1,27 +1,12 @@
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
-from celery import Celery, Task
-from flask import Flask
 
 load_dotenv()
 
 
-def celery_init_app(app: Flask) -> Celery:
-    class FlaskTask(Task):
-        def __call__(self, *args: object, **kwargs: object) -> object:
-            with app.app_context():
-                return self.run(*args, **kwargs)
-
-    celery_app = Celery(app.name, task_cls=FlaskTask)
-    celery_app.config_from_object(app.config["CELERY"])
-    celery_app.set_default()
-    app.extensions["celery"] = celery_app
-    return celery_app
-
-
 class Config:
-    SECRET_KEY = os.getenv("SECRET")
+    SECRET_KEY = os.getenv("SFECRET")
     MONGO_URI = os.environ.get("URL")
     UPLOAD_FOLDER_IMAGE = os.path.join(os.getcwd(), "myapp", "static", "img")
 

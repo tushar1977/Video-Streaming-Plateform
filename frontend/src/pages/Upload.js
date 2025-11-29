@@ -1,143 +1,178 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { useAuth } from "../Context/AuthContext";
-import apiClient, { uploadClient } from "../api/apiClient";
+"use client"
+
+import { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
+import { motion, AnimatePresence } from "framer-motion"
+import { useAuth } from "../Context/AuthContext"
+import { uploadClient } from "../api/apiClient"
+import io from "socket.io-client"
 
 export default function Upload() {
-  const navigate = useNavigate();
-  const { isAuthenticated, user, token } = useAuth();
-  const [videoTitle, setVideoTitle] = useState("");
-  const [videoDesc, setVideoDesc] = useState("");
-  const [thumbnail, setThumbnail] = useState(null);
-  const [file, setFile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [currentStage, setCurrentStage] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
+  const navigate = useNavigate()
+  const { isAuthenticated, user, token } = useAuth()
+  const [videoTitle, setVideoTitle] = useState("")
+  const [videoDesc, setVideoDesc] = useState("")
+  const [thumbnail, setThumbnail] = useState(null)
+  const [file, setFile] = useState(null)
+  const [error, setError] = useState("")
+  const [socket, setSocket] = useState(null)
+  const [progressCards, setProgressCards] = useState([])
+  const socketRef = useRef(null)
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate("/auth");
+      navigate("/auth")
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate])
+
+  // Socket.IO setup - Connect to microservice port (3002)
+  useEffect(() => {
+    if (!user?.id) return
+
+    // Clean up any existing connection first
+    if (socketRef.current) {
+      socketRef.current.disconnect()
+    }
+
+    const newSocket = io('https://localhost:3000', {
+      transports: ['polling'],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      secure: true, // Add this for HTTPS
+      rejectUnauthorized: false // Add this for self-signed certificates
+    });
+
+    socketRef.current = newSocket
+    setSocket(newSocket)
+
+    newSocket.on("connect", () => {
+      console.log("[SOCKET] Connected:", newSocket.id)
+      newSocket.emit("join", { room: `userId_${user.id}` })
+      console.log(`[SOCKET] Joined room: userId_${user.id}`)
+
+    })
+
+    newSocket.on("send_updates", (data) => {
+      console.log("[SOCKET] Progress update received:", data)
+      console.log("[SOCKET] User ID match:", data.user_id, "===", user?.id)
+
+      if (data.user_id === user?.id) {
+        console.log("[SOCKET] Processing update for matching user")
+        setProgressCards((prevCards) => {
+          const existingIndex = prevCards.findIndex(
+            (card) => card.base_name === data.base_name
+          )
+
+          const cardData = {
+            base_name: data.base_name,
+            status: data.status,
+            progress: data.progress || 0,
+            current_quality: data.current_quality,
+            total_qualities: data.total_qualities,
+            completed_qualities: data.completed_qualities,
+            error: data.error,
+            unique_name: data.unique_name,
+            message: data.message,
+            timestamp: new Date().toISOString(),
+          }
+
+          if (existingIndex !== -1) {
+            const updated = [...prevCards]
+            updated[existingIndex] = cardData
+            return updated
+          } else {
+            return [...prevCards, cardData]
+          }
+        })
+      }
+    })
+
+    newSocket.on("disconnect", () => {
+      console.log("[SOCKET] Disconnected")
+    })
+
+    return () => {
+      if (user?.id) {
+        newSocket.emit("leave", { room: `userId_${user.id}` })
+      }
+      newSocket.close()
+    }
+  }, [user?.id])
 
   const uploadWithProgress = async (e) => {
-    e.preventDefault();
+    e.preventDefault()
 
     if (!isAuthenticated) {
-      setError("Please log in to upload videos");
-      navigate("/auth");
-      return;
+      setError("Please log in to upload videos")
+      navigate("/auth")
+      return
     }
 
     if (!file || !thumbnail) {
-      setError("Please select both video and thumbnail.");
-      return;
+      setError("Please select both video and thumbnail.")
+      return
     }
 
-    const formData = new FormData();
-    formData.append("video_title", videoTitle);
-    formData.append("video_desc", videoDesc);
-    formData.append("img", thumbnail);
-    formData.append("file", file);
+    const formData = new FormData()
+    formData.append("video_title", videoTitle)
+    formData.append("video_desc", videoDesc)
+    formData.append("img", thumbnail)
+    formData.append("file", file)
 
     try {
-      setUploading(true);
-      setError("");
-      setUploadProgress(0);
-      setProcessingProgress(0);
-      setCurrentStage("Preparing upload...");
-
-      // Simulate preparation stage
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setCurrentStage("Uploading video...");
+      setError("")
 
       const response = await uploadClient.post("/upload", formData, {
         headers: {
-          "Content-Type": "multipartw/form-data",
+          "Content-Type": "multipart/form-data",
           Authorization: `Bearer ${token}`,
-
         },
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-            setUploadProgress(percent);
-
-            // Update stage based on progress
-            if (percent < 20) {
-              setCurrentStage("Uploading video...");
-            } else if (percent < 80) {
-              setCurrentStage("Uploading video...");
-            } else if (percent < 100) {
-              setCurrentStage("Finalizing upload...");
-            }
-          }
-        },
-      });
+      })
 
       if (response.status === 200) {
-        setUploadProgress(100);
-        setCurrentStage("Processing video...");
-
-        // Simulate processing stages since backend doesn't provide real-time progress
-        const processingStages = [
-          "Converting to HLS format...",
-          "Generating quality variants...",
-          "Creating master playlist...",
-          "Saving thumbnail...",
-          "Finalizing video..."
-        ];
-
-        for (let i = 0; i < processingStages.length; i++) {
-          setCurrentStage(processingStages[i]);
-          setProcessingProgress(Math.round(((i + 1) / processingStages.length) * 100));
-          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-        }
-
-        setCurrentStage("Upload complete!");
-        setSuccess(true);
-
-        // Redirect after showing success
-        setTimeout(() => {
-          if (response.data.redirect_url) {
-            navigate(response.data.redirect_url);
-          } else {
-            navigate("/profile");
-          }
-        }, 2000);
+        // Reset form
+        setVideoTitle("")
+        setVideoDesc("")
+        setThumbnail(null)
+        setFile(null)
+        // Reset file inputs
+        e.target.reset()
       }
     } catch (error) {
-      console.error("Upload error:", error);
-      setError("Upload failed. Please try again.");
+      console.error("[UPLOAD ERROR]:", error)
 
       if (error.response) {
-        const errorMessage = error.response.data?.error || error.response.data?.message || "Unknown error";
-        setError(`Upload failed: ${errorMessage}`);
+        const errorMessage = error.response.data?.error || error.response.data?.message || "Unknown error"
+        setError(`Upload failed: ${errorMessage}`)
       } else {
-        setError("Upload failed: " + error.message);
+        setError("Upload failed: " + error.message)
       }
-    } finally {
-      setUploading(false);
-      // Don't reset progress immediately to show completion
-      setTimeout(() => {
-        setUploadProgress(0);
-        setProcessingProgress(0);
-        setCurrentStage("");
-      }, 3000);
     }
-  };
+  }
 
-  // Show unauthorized if user navigates here manually
+  const removeCard = (baseName) => {
+    setProgressCards((prev) => prev.filter((card) => card.base_name !== baseName))
+  }
+
+  const getProgressColor = (card) => {
+    if (card.error || card.status === "processing_failed" || card.status === "quality_failed") {
+      return "bg-red-500"
+    }
+    if (card.progress === 100 && card.completed_qualities === card.total_qualities) {
+      return "bg-green-500"
+    }
+    return "bg-blue-500"
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-white text-xl">Please log in to upload videos</div>
       </div>
-    );
+    )
   }
 
   return (
@@ -147,9 +182,7 @@ export default function Upload() {
 
         <form onSubmit={uploadWithProgress} className="flex flex-col gap-4">
           {error && (
-            <div className="bg-red-900/20 border border-red-500 text-red-400 p-3 rounded-lg text-sm">
-              {error}
-            </div>
+            <div className="bg-red-900/20 border border-red-500 text-red-400 p-3 rounded-lg text-sm">{error}</div>
           )}
 
           <input
@@ -159,14 +192,12 @@ export default function Upload() {
             onChange={(e) => setVideoTitle(e.target.value)}
             className="bg-gray-800 text-white p-3 rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
             required
-            disabled={uploading}
           />
           <textarea
             placeholder="Video Description"
             value={videoDesc}
             onChange={(e) => setVideoDesc(e.target.value)}
             className="bg-gray-800 text-white p-3 rounded-lg outline-none h-24 resize-none focus:ring-2 focus:ring-purple-500"
-            disabled={uploading}
           />
           <label className="text-gray-400 text-sm">Thumbnail Image</label>
           <input
@@ -175,7 +206,6 @@ export default function Upload() {
             onChange={(e) => setThumbnail(e.target.files[0])}
             className="text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
             required
-            disabled={uploading}
           />
           <label className="text-gray-400 text-sm">Video File</label>
           <input
@@ -184,108 +214,77 @@ export default function Upload() {
             onChange={(e) => setFile(e.target.files[0])}
             className="text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
             required
-            disabled={uploading}
           />
 
           <button
             type="submit"
-            disabled={uploading}
-            className={`${uploading
-              ? "bg-purple-800 cursor-not-allowed"
-              : "bg-purple-600 hover:bg-purple-700"
-              } text-white font-semibold py-3 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100`}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-lg transition-all duration-200 transform hover:scale-105"
           >
-            {uploading ? "Processing..." : "Upload Video"}
+            Upload Video
           </button>
         </form>
       </div>
 
-      {/* Enhanced Progress Modal */}
-      {uploading && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-        >
-          <div className="bg-gray-900 text-white rounded-2xl shadow-xl p-8 w-full max-w-md mx-4">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 bg-purple-600 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold mb-2">Uploading Video</h3>
-              <p className="text-gray-400 text-sm">{currentStage}</p>
-            </div>
-
-            {/* Upload Progress */}
-            <div className="mb-4">
-              <div className="flex justify-between text-sm mb-2">
-                <span>Upload Progress</span>
-                <span>{uploadProgress}%</span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <motion.div
-                  className="bg-purple-500 h-2 rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${uploadProgress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
-            </div>
-
-            {/* Processing Progress */}
-            {uploadProgress === 100 && (
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span>Processing Video</span>
-                  <span>{processingProgress}%</span>
+      {/* Processing Progress Cards - Bottom Right */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-80">
+        <AnimatePresence>
+          {progressCards.map((card) => (
+            <motion.div
+              key={card.base_name}
+              initial={{ opacity: 0, x: 100, y: 20 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: 100 }}
+              transition={{ type: "spring", stiffness: 200, damping: 25 }}
+              className="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl p-3"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex-1 min-w-0 mr-2">
+                  <h4 className="font-medium text-white text-sm truncate">{card.base_name}</h4>
+                  <p className="text-xs text-gray-400 truncate">
+                    {card.current_quality ? `Processing ${card.current_quality}` : card.message || card.status}
+                  </p>
                 </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
+                <button
+                  onClick={() => removeCard(card.base_name)}
+                  className="text-gray-500 hover:text-gray-300 transition-colors text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-2">
+                <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
                   <motion.div
-                    className="bg-blue-500 h-2 rounded-full"
+                    className={`${getProgressColor(card)} h-1.5 rounded-full`}
                     initial={{ width: 0 }}
-                    animate={{ width: `${processingProgress}%` }}
+                    animate={{ width: `${card.progress}%` }}
                     transition={{ duration: 0.3 }}
                   />
                 </div>
               </div>
-            )}
 
-            {/* Stage Indicator */}
-            <div className="text-center">
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-gray-800 text-sm">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
-                {currentStage}
+              {/* Footer */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400">
+                  {card.completed_qualities && card.total_qualities
+                    ? `${card.completed_qualities}/${card.total_qualities} qualities`
+                    : "Processing..."}
+                </span>
+                <span className="text-gray-500 font-medium">{card.progress}%</span>
               </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
 
-      {/* Success Dialog */}
-      {success && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-        >
-          <div className="bg-gray-900 text-center p-8 rounded-2xl shadow-xl max-w-md mx-4">
-            <div className="w-16 h-16 mx-auto mb-4 bg-green-600 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-white text-xl font-bold mb-2">🎉 Upload Complete!</h2>
-            <p className="text-gray-400 mb-4">Your video has been successfully uploaded and processed.</p>
-            <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span>Redirecting to your profile...</span>
-            </div>
-          </div>
-        </motion.div>
-      )}
+              {/* Error */}
+              {card.error && (
+                <div className="mt-2 text-xs text-red-400 bg-red-900/20 border border-red-500/30 rounded p-2">
+                  {card.error}
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
-  );
+  )
 }

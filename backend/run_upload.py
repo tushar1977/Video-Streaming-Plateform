@@ -1,10 +1,9 @@
 import os
-from myapp import create_app, sock
-from myapp.config import DevelopmentConfig, ProductionConfig
+from uploadPipeline import create_app_upload, sock_upload
 
 env = os.environ.get("FLASK_ENV")
 
-app = create_app()
+app = create_app_upload()
 
 
 if __name__ == "__main__":
@@ -14,10 +13,10 @@ if __name__ == "__main__":
     else:
         print(" Running in Development mode")
         host = os.environ.get("FLASK_HOST", "0.0.0.0")
-        port = int(os.environ.get("FLASK_PORT", 3000))
+        port = int(os.environ.get("FLASK_PORT", 3002))
         debug = os.environ.get("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
 
-        sock.run(
+        sock_upload.run(
             app=app,
             host=host,
             port=port,

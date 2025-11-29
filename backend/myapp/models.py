@@ -12,6 +12,7 @@ class Video:
     video_title: str
     video_desc: str
     file_name: str = ""
+    processed: bool = False
     thumbnail_name: str = ""
     views: int = 0
     unique_name: str = ""

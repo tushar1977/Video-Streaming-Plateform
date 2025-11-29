@@ -75,10 +75,7 @@ def resize_video(input_path, output_path, width, height):
     else:
         out = ffmpeg.output(v, output_path, **output_args)
 
-    out = out.overwrite_output()
-
-    # Run
-    out.run()
+    out.run(overwrite_output=True, capture_stdout=True, capture_stderr=True, quiet=True)
 
     print(f"Video resized and saved as HLS at: {output_path}")
 

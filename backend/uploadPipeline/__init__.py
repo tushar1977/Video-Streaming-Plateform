@@ -2,11 +2,10 @@ import eventlet
 
 eventlet.monkey_patch()
 import logging
-from celery import Celery, Task
-from bson import ObjectId
-from flask import Flask, jsonify
+from threading import Thread
+from uploadPipeline.config import Config
+from flask import Flask, copy_current_request_context
 import os
-from flask_login import LoginManager
 from flask_socketio import SocketIO
 from dotenv import load_dotenv
 from flask_cors import CORS
@@ -14,28 +13,28 @@ from flask_pymongo import PyMongo
 from flask_jwt_extended import (
     JWTManager,
 )
-from .config import Config
+
 
 load_dotenv()
 
 
-login_manager = LoginManager()
-sock = SocketIO()
+sock_upload = SocketIO()
 mongo = PyMongo()
 cors = CORS()
 jwt = JWTManager()
 
 
-def consumer():
-    from myapp.video import consume_status_queue
+def start_consumer():
+    from uploadPipeline.video import pop_queue
 
-    consume_status_queue()
+    pop_queue()
 
 
-def create_app():
+def create_app_upload():
     app = Flask(__name__, static_url_path="/static")
 
     app.config.from_object(Config)
+
     app.logger.setLevel(logging.INFO)
     handler = logging.FileHandler("app.log")
     app.logger.addHandler(handler)
@@ -44,8 +43,9 @@ def create_app():
     os.makedirs(app.config["UPLOAD_FOLDER_IMAGE"], exist_ok=True)
 
     mongo.init_app(app)
+    print(mongo)
 
-    sock.init_app(
+    sock_upload.init_app(
         app,
         cors_allowed_origins="*",
         allow_upgrades=True,
@@ -69,45 +69,11 @@ def create_app():
             "Authorization",
         ],
     )
-    login_manager.login_view = "auth.login"
-    login_manager.init_app(app)
-    login_manager.session_protection = "strong"
-    from myapp.models import User
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        try:
-            user_data = mongo.db.users.find_one({"_id": ObjectId(user_id)})
-        except Exception:
-            return None
-
-        if user_data:
-            return User.from_dict(user_data)
-        return None
-
-    @login_manager.unauthorized_handler
-    def unauthorized_callback():
-        return jsonify({"error": "Unauthorized", "message": "Please log in"}), 401
-
-    from .auth import auth
-
-    app.register_blueprint(auth, url_prefix="/auth")
-
-    from .home import home
-
-    app.register_blueprint(home)
 
     from .video import video
 
     app.register_blueprint(video)
 
-    from .comments import comm
+    eventlet.spawn(start_consumer)
 
-    app.register_blueprint(comm)
-
-    from .likes import like
-
-    app.register_blueprint(like)
-
-    eventlet.spawn(consumer)
     return app
