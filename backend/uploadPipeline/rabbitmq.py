@@ -1,5 +1,8 @@
 import pika
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def createChannel():
@@ -35,7 +38,7 @@ class VideoQueueManager:
         self.channel.queue_declare(queue=self.dead_letter_queue, durable=True)
         self.channel.queue_declare(queue=self.status_queue, durable=True)
 
-        print(
+        logger.info(
             f"RabbitMQ queues configured: {self.queue_name}, {self.dead_letter_queue}"
         )
 
@@ -43,7 +46,7 @@ class VideoQueueManager:
         self.channel.basic_publish(
             exchange="", routing_key=self.status_queue, body=json.dumps(status_message)
         )
-        print("[SENT] Sent to Status queue")
+        logger.info("[SENT] Sent to Status queue")
 
     def close(self):
         if self.channel and self.channel.is_open:

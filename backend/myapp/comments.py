@@ -1,10 +1,12 @@
 from flask import Blueprint, jsonify, request
+import logging
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from bson import ObjectId
 from .models import Comment
 from . import mongo
 
 comm = Blueprint("comm", __name__)
+logger = logging.getLogger("myapp.comments")
 
 
 @comm.route("/comment/<string:unique_name>", methods=["POST"])
@@ -33,7 +35,7 @@ def upload_comment(unique_name):
         return jsonify({"success": True, "comments": [comment_dict]})
 
     except Exception as e:
-        print(f"Error saving comment: {e}")
+        logger.error(f"Error saving comment: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -50,5 +52,5 @@ def get_comments(unique_name):
 
         return jsonify({"success": True, "comments": comments})
     except Exception as e:
-        print(f"Error fetching comments: {e}")
+        logger.error(f"Error fetching comments: {e}")
         return jsonify({"success": False, "error": str(e)}), 500

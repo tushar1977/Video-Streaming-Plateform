@@ -1,10 +1,13 @@
 import pika
+import logging
 import json
 import time
 import uuid
 from typing import Dict, Any
 from datetime import datetime
 from . import sock
+
+logger = logging.getLogger("myapp.RabbitMQ")
 
 
 def createChannel():
@@ -41,8 +44,8 @@ class VideoQueueManager:
 
         self.channel.queue_declare(queue=self.status_queue, durable=True)
 
-        print(
-            f"RabbitMQ queues configured: {self.queue_name}, {self.dead_letter_queue}"
+        logger.info(
+            f"RabbitMQ queues configured: {self.queue_name}, {self.dead_letter_queue}, {self.status_queue}"
         )
 
     def push_video(self, video_data: Dict[str, Any]) -> str:
@@ -74,7 +77,7 @@ class VideoQueueManager:
         )
         self._send_queued_status(user_id, base_name, job_id)
 
-        print(
+        logger.info(
             f"Video Data pushed to Queue with Job Id {job_id} \n for user {video_data.get('user_id')}"
         )
         return job_id
@@ -91,7 +94,7 @@ class VideoQueueManager:
         }
 
         sock.emit("send_updates", progress_msg, room=f"userId_{user_id}")
-        print(f"✓ Sent 'queued' status to user {user_id}")
+        logger.info(f"✓ Sent 'queued' status to user {user_id}")
 
     def get_queue_status(self):
         try:
@@ -107,7 +110,7 @@ class VideoQueueManager:
                 "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
-            print(f"✗ Failed to get queue stats: {e}")
+            logger.error(f"✗ Failed to get queue stats: {e}")
             return {
                 "queue_name": self.queue_name,
                 "pending_jobs": 0,

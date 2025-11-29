@@ -1,4 +1,5 @@
 import concurrent.futures
+import logging
 import eventlet
 import datetime
 import json
@@ -19,6 +20,7 @@ import string
 
 video = Blueprint("video", __name__)
 queue_manager = VideoQueueManager()
+logger = logging.getLogger(__name__)
 
 
 def send_progress_update(
@@ -110,7 +112,7 @@ def process_videos(original_path, video_folder, base_name, user_id):
 
                 progress = 5 + int((completed_count / total_qualities) * 85)
 
-                print(f"{quality.name}, progress = {progress}")
+                logger.info(f"{quality.name}, progress = {progress}")
                 send_progress_update(
                     user_id=user_id,
                     base_name=base_name,
@@ -122,7 +124,7 @@ def process_videos(original_path, video_folder, base_name, user_id):
                 )
 
             except concurrent.futures.TimeoutError:
-                print(f"Timeout processing quality: {quality.name}")
+                logger.error(f"Timeout processing quality: {quality.name}")
                 send_progress_update(
                     user_id=user_id,
                     base_name=base_name,
@@ -133,7 +135,7 @@ def process_videos(original_path, video_folder, base_name, user_id):
                 )
                 return True
             except Exception as e:
-                print(f"Error processing video quality {quality.name}: {e}")
+                logger.error(f"Error processing video quality {quality.name}: {e}")
                 send_progress_update(
                     user_id=user_id,
                     base_name=base_name,
@@ -151,7 +153,9 @@ def process_videos(original_path, video_folder, base_name, user_id):
 
                             shutil.rmtree(quality_path)
                         except Exception as e:
-                            print(f"Error cleaning up quality path {quality_path}: {e}")
+                            logger.error(
+                                f"Error cleaning up quality path {quality_path}: {e}"
+                            )
                 return True
     return False
 
@@ -163,7 +167,7 @@ def upload(ch, method, properties, body):
     should_ack = True
 
     try:
-        print(f"[→] Processing job {job_id}")
+        logger.info(f"[→] Processing job {job_id}")
 
         message_data = json.loads(body.decode())
         video_data = message_data["data"]
@@ -172,7 +176,7 @@ def upload(ch, method, properties, body):
         video_path = video_data.get("video_path")
 
         if not all([user_id, base_name, video_path]):
-            print(" [x] Missing required fields in message")
+            logger.error(" [x] Missing required fields in message")
             should_ack = True
             return
 
@@ -204,7 +208,7 @@ def upload(ch, method, properties, body):
                 current_quality=None,
                 total_qualities=len(Video_Quality),
             )
-            print(" [x] Video processing failed")
+            logger.error(" [x] Video processing failed")
             should_ack = True
             return
 
@@ -225,7 +229,7 @@ def upload(ch, method, properties, body):
         try:
             mongo.db.videos.insert_one(video_doc)
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         send_progress_update(
             user_id=user_id,
@@ -237,18 +241,20 @@ def upload(ch, method, properties, body):
         )
 
         eventlet.sleep(1)
-        print(f" [x] Successfully processed video: {unique_name} for user: {user_id}")
+        logger.info(
+            f" [x] Successfully processed video: {unique_name} for user: {user_id}"
+        )
 
     except json.JSONDecodeError as e:
-        print(f" [x] JSON decode error: {e}")
+        logger.error(f" [x] JSON decode error: {e}")
     except Exception as e:
-        print(f" [x] Unexpected error in upload processing: {e}")
+        logger.error(f" [x] Unexpected error in upload processing: {e}")
         should_ack = True
 
     finally:
         if should_ack:
             ch.basic_ack(delivery_tag=method.delivery_tag)
-        print(f"[✓] Job {job_id} acknowledged")
+        logger.info(f"[✓] Job {job_id} acknowledged")
 
 
 def pop_queue():
@@ -258,16 +264,13 @@ def pop_queue():
         channel.basic_consume(
             queue="upload", auto_ack=False, on_message_callback=upload
         )
-        print(" [*] Video worker ready - waiting for jobs")
+        logger.info(" [*] Video worker ready - waiting for jobs")
         channel.start_consuming()
     except KeyboardInterrupt:
-        print("\n[!] Shutting down worker...")
+        logger.error("\n[!] Shutting down worker...")
         channel.stop_consuming()
-
-    except Exception as e:
-        print(f"[✗] Queue consumption error: {e}")
 
     finally:
         if channel.is_open:
             channel.close()
-        print("[!] Worker stopped")
+        logger.info("[!] Worker stopped")

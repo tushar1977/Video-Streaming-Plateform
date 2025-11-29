@@ -2,6 +2,7 @@ import eventlet
 
 eventlet.monkey_patch()
 import logging
+from logging.handlers import RotatingFileHandler
 from celery import Celery, Task
 from bson import ObjectId
 from flask import Flask, jsonify
@@ -37,8 +38,6 @@ def create_app():
 
     app.config.from_object(Config)
     app.logger.setLevel(logging.INFO)
-    handler = logging.FileHandler("app.log")
-    app.logger.addHandler(handler)
 
     os.makedirs(app.config["UPLOAD_FOLDER_VIDEO"], exist_ok=True)
     os.makedirs(app.config["UPLOAD_FOLDER_IMAGE"], exist_ok=True)
@@ -88,6 +87,22 @@ def create_app():
     @login_manager.unauthorized_handler
     def unauthorized_callback():
         return jsonify({"error": "Unauthorized", "message": "Please log in"}), 401
+
+    file_handler = RotatingFileHandler(
+        "myapp.log",
+        maxBytes=1024 * 1024 * 10,
+        backupCount=10,
+    )
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]"
+        )
+    )
+    file_handler.setLevel(logging.INFO)
+
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info("MyApp startup")
 
     from .auth import auth
 

@@ -1,4 +1,5 @@
 import requests
+import logging
 import json
 from myapp.rabbitmq import VideoQueueManager
 from flask import (
@@ -26,7 +27,7 @@ from . import mongo
 from . import sock
 
 video = Blueprint("video", __name__)
-
+logger = logging.getLogger("myapp.video")
 queue_manager = VideoQueueManager()
 
 
@@ -96,7 +97,6 @@ def serve_hls(unique_name):
 
     master_path = get_video_path(video["file_name"])
     master_manifest_path = os.path.join(master_path, "master.m3u8")
-    print(master_manifest_path)
 
     if os.path.isfile(master_manifest_path):
         with open(master_manifest_path, "r") as f:
@@ -109,7 +109,6 @@ def serve_hls(unique_name):
                 "Access-Control-Allow-Origin": "*",
             }
         )
-        print(response)
         return response
 
     return "Master manifest not found", 404
@@ -248,8 +247,8 @@ def upload():
         job_id = queue_manager.push_video(message_payload)
         queue_stats = queue_manager.get_queue_size()
 
-        print(f"[✓] Video '{base_name}' queued. Job: {job_id}, User: {user_id}")
-        print(f"[QUEUE] Pending jobs: {queue_stats}")
+        logger.info(f"[✓] Video '{base_name}' queued. Job: {job_id}, User: {user_id}")
+        logger.info(f"[QUEUE] Pending jobs: {queue_stats}")
 
         return jsonify(
             {
@@ -261,7 +260,7 @@ def upload():
         ), 200
 
     except Exception as e:
-        print(f"[UPLOAD ERROR] {str(e)}")
+        logger.error(f"[UPLOAD ERROR] {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 
@@ -274,7 +273,7 @@ def consume_status_queue():
             sock.emit("send_updates", data, room=f"userId_{data['user_id']}")
             ch.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as e:
-            print(e)
+            logger.error(e)
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
     channel.basic_consume(

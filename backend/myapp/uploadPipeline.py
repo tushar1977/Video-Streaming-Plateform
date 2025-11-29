@@ -80,8 +80,6 @@ def resize_video(input_path, output_path, width, height):
     # Run
     out.run()
 
-    print(f"Video resized and saved as HLS at: {output_path}")
-
 
 def get_bitrate_for_quality(quality: Video_Quality) -> int:
     bitrate_map = {

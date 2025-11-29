@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+import logging
 from flask_socketio import join_room, leave_room
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from bson import ObjectId
@@ -6,6 +7,7 @@ from . import sock
 from .models import mongo
 
 like = Blueprint("like", __name__)
+logger = logging.getLogger(__name__)
 
 
 @sock.on("join")
@@ -13,7 +15,7 @@ def handle_join(data):
     room = data.get("room")
     if room:
         join_room(room)
-        print(f"{request.sid} joined {room}")
+        logger.info(f"{request.sid} joined {room}")
 
 
 @sock.on("leave")
@@ -21,7 +23,7 @@ def handle_leave(data):
     room = data.get("room")
     if room:
         leave_room(room)
-        print(f"{request.sid} left {room}")
+        logger.info(f"{request.sid} left {room}")
 
 
 @like.route("/like_action/like/<string:unique_name>", methods=["POST"])
