@@ -8,6 +8,10 @@ This project is a lightweight video streaming platform built with **Flask**. It 
 
 ---
 
+## **Architecture**
+
+<img width="1538" height="1745" alt="trans" src="https://github.com/user-attachments/assets/81b4bee5-962b-4ef8-b0b2-22202d5dcb40" />
+
 ## **Features**
 
 - **Efficient Video Streaming**
@@ -40,6 +44,5 @@ cd Video-Streaming-Plateform
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-export FLASK_APP=myserver
-python3 run.py
+python3 run.py && python3 run_upload.py
 ```
