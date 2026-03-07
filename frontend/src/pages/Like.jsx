@@ -28,7 +28,7 @@ export default function LikeDislikeButton({
 
   useEffect(() => {
     // Connect to Flask-SocketIO
-    const socket = io("https://127.0.0.1:3000", {
+    const socket = io(process.env.baseURL, {
       transports: ["websocket"],
       secure: true,
       reconnection: true,

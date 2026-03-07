@@ -35,7 +35,7 @@ export default function Upload() {
       socketRef.current.disconnect()
     }
 
-    const newSocket = io('https://localhost:3000', {
+    const newSocket = io(process.env.REACT_APP_baseURL, {
       transports: ['polling'],
       autoConnect: true,
       reconnection: true,

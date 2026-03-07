@@ -1,7 +1,6 @@
 from logging.handlers import RotatingFileHandler
-import eventlet
 
-eventlet.monkey_patch()
+import eventlet
 import logging
 from threading import Thread
 from uploadPipeline.config import Config
@@ -37,7 +36,7 @@ def create_app_upload():
     app.config.from_object(Config)
 
     app.logger.setLevel(logging.INFO)
-    handler = logging.FileHandler("app.log")
+    handler = logging.FileHandler("uploadPipeline.log")
     app.logger.addHandler(handler)
 
     os.makedirs(app.config["UPLOAD_FOLDER_VIDEO"], exist_ok=True)

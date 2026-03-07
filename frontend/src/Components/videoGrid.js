@@ -10,8 +10,9 @@ export default function VideoGrid() {
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        const response = await fetch("https://127.0.0.1:3000")
+        const response = await fetch(process.env.REACT_APP_baseURL)
         const data = await response.json()
+        console.log(data)
 
         if (data.success) {
           setVideos(data.videos)

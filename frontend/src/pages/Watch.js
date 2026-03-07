@@ -33,7 +33,7 @@ export default function VideoPlayer() {
     const fetchVideoData = async () => {
       try {
         console.log("Fetching video data for:", uniqueName)
-        const res = await fetch(`https://127.0.0.1:3000/api/video/${uniqueName}`)
+        const res = await fetch(`${process.env.REACT_APP_baseURL}/api/video/${uniqueName}`)
         const data = await res.json()
         console.log("Video data:", data)
 
@@ -95,7 +95,7 @@ export default function VideoPlayer() {
         hls.attachMedia(videoRef.current)
         hls.on(HLS.Events.MEDIA_ATTACHED, () => {
           console.log("Media attached, loading manifest...")
-          hls.loadSource(`https://127.0.0.1:3000/watch/${uniqueName}/master.m3u8`)
+          hls.loadSource(`${process.env.REACT_APP_baseURL}/watch/${uniqueName}/master.m3u8`)
         })
 
         hls.on(HLS.Events.MANIFEST_PARSED, (_, data) => {
@@ -120,7 +120,7 @@ export default function VideoPlayer() {
           console.error("HLS error:", data)
         })
       } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
-        videoRef.current.src = `https://127.0.0.1:3000/watch/${uniqueName}/master.m3u8`
+        videoRef.current.src = `${process.env.REACT_APP_baseURL}/watch/${uniqueName}/master.m3u8`
       }
     }
 

@@ -21,7 +21,7 @@ from myapp.uploadPipeline import (
     get_file_path,
     get_video_path,
 )
-from uploadPipeline.rabbitmq import createChannel
+from .rabbitmq import createChannel
 
 from . import mongo
 from . import sock

@@ -1,7 +1,8 @@
 backend/__pycache__
 backend/myapp/__pycache__/
 .certs/
-backend/uploadPipeline/__pycache_/
+backend/uploadPipeline/__pycache__/
+__pycache__/
 backend/.venv
 backend/migrations
 backend/./cert.pem

@@ -8,7 +8,7 @@ load_dotenv()
 class Config:
     SECRET_KEY = os.getenv("SFECRET")
     MONGO_URI = os.environ.get("URL")
-    UPLOAD_FOLDER_IMAGE = os.path.join(os.getcwd(), "myapp", "static", "img")
+    UPLOAD_FOLDER_IMAGE = os.path.join("/var", "myapp", "static", "img")
 
     JWT_SECRET_KEY = "ffff"
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
@@ -20,7 +20,7 @@ class Config:
     SESSION_REFRESH_EACH_REQUEST = False
     SESSION_COOKIE_DOMAIN = None
 
-    UPLOAD_FOLDER_VIDEO = os.path.join(os.getcwd(), "myapp", "static", "video")
+    UPLOAD_FOLDER_VIDEO = os.path.join("/var" ,"myapp", "static", "video")
     UPLOAD_EXTENSIONS = [
         ".mp4",
         ".avi",

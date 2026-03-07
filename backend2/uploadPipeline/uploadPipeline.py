@@ -10,34 +10,6 @@ class Video_Quality(Enum):
     Q1080 = [1920, 1080]
 
 
-def get_chunk(file_path, byte1=None, byte2=None):
-    file_size = os.stat(file_path).st_size
-    start = 0 if byte1 is None else byte1
-    end = file_size - 1 if byte2 is None else byte2
-    length = end - start + 1
-
-    with open(file_path, "rb") as f:
-        f.seek(start)
-        chunk = f.read(length)
-
-    return chunk, start, end, file_size
-
-
-def get_file_path(
-    filename,
-    quality,
-):
-    upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
-    return os.path.join(upload_folder, filename, f"Q{quality}@{filename}", "hls")
-
-
-def get_video_path(
-    filename,
-):
-    upload_folder = current_app.config["UPLOAD_FOLDER_VIDEO"]
-    return os.path.join(upload_folder, filename)
-
-
 def resize_video(input_path, output_path, width, height):
     segment_dir = os.path.dirname(output_path)
     os.makedirs(segment_dir, exist_ok=True)

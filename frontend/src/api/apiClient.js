@@ -2,7 +2,7 @@ import axios from "axios"
 
 // Create base API client with common configuration
 const apiClient = axios.create({
-  baseURL: "https://127.0.0.1:3000", // Use http locally; https only if Flask has SSL
+  baseURL: process.env.REACT_APP_baseURL, // Use http locally; https only if Flask has SSL // Use http locally; https only if Flask has SSL
   withCredentials: true,             // ✅ crucial if using cookies
   headers: {
     "Content-Type": "application/json",
@@ -28,7 +28,7 @@ apiClient.interceptors.request.use(
 export default apiClient
 // Create specialized client for file uploads
 export const uploadClient = axios.create({
-  baseURL: "https://127.0.0.1:3000", // Flask backend
+  baseURL: process.env.REACT_APP_baseURL, // Use http locally; https only if Flask has SSL // Flask backend
   withCredentials: true,
   headers: {
     "Content-Type": "multipart/form-data",

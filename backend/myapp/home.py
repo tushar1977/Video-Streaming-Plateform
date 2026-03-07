@@ -36,7 +36,8 @@ def index():
                 continue
 
             thumbnail_path = os.path.join(
-                current_app.static_folder, "img", thumbnail_name
+                current_app.config["UPLOAD_FOLDER_IMAGE"],
+                thumbnail_name,
             )
             if not os.path.exists(thumbnail_path):
                 continue
@@ -44,7 +45,6 @@ def index():
             image_url = url_for(
                 "static", filename=f"img/{thumbnail_name}", _external=True
             )
-
             video_data.append(
                 {
                     "_id": str(video.get("_id")),

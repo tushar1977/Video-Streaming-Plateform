@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://192.168.1.132:3000';
+const API_BASE_URL = process.env.REACT_APP_baseURL;
 
 export const AUTH_ENDPOINTS = {
   login: `${API_BASE_URL}/auth/login`,
