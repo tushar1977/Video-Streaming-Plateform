@@ -1,4 +1,5 @@
 backend/__pycache__
+deploy/data/certs/*
 backend/myapp/__pycache__/
 .certs/
 backend/uploadPipeline/__pycache__/
