@@ -1,5 +1,5 @@
 backend/__pycache__
-deploy/data/certs/*
+deploy/reverseProxy/data/certs/*
 backend/myapp/__pycache__/
 .certs/
 backend/uploadPipeline/__pycache__/

@@ -1,0 +1,38 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: DEBUG  # Options: TRACE, DEBUG, INFO, WARN, ERROR, FATAL
+
+api:
+  dashboard: true
+  insecure: true  # Set to false in production for security
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: tushar.197712@gmail.com
+      storage: /var/traefik/certs/cloudflare-acme.json
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      dnsChallenge:
+        provider: cloudflare  # <-- (Optional) Change this to your DNS provider
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+providers:
+  docker:
+    exposedByDefault: true  # <-- (Optional) Change this to true if you want to expose all services
+    # Specify discovery network - This ensures correct name resolving and possible issues with containers, that are in multiple networks.
+    # E.g. Database container in a separate network and a container in the frontend and database network.
+    endpoint: "unix:///var/run/docker.sock"

@@ -1,0 +1,30 @@
+version: '3'
+services:
+  traefik:
+    image: traefik:latest
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--api.dashboard=true"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.address=:80"
+      - "--providers.docker.network=custom_network"
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "3000:3000"
+      - "3001:3001"
+      - "3002:3002"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/traefik-config.yml:/etc/traefik/traefik.yml:ro
+      - ./data/certs/:/var/traefik/certs/:rw
+    networks:
+      - custom_network
+
+networks:
+  custom_network:
+    external: true
