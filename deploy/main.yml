@@ -1,0 +1,27 @@
+services:
+  backend1:
+    image: backend1
+    container_name: backend1
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./.env.b1
+
+    networks:
+      - custom_network
+  backend2:
+    image: backend2
+    container_name: backend2
+    restart: always
+    ports:
+      - "3002:3002"
+    env_file:
+      - ./.env.b2
+
+    networks:
+      - custom_network
+
+networks:
+  custom_network:
+    external: true

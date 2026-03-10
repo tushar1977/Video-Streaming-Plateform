@@ -14,10 +14,10 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "8080:8080"
       - "3000:3000"
       - "3001:3001"
       - "3002:3002"
-      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config/traefik-config.yml:/etc/traefik/traefik.yml:ro

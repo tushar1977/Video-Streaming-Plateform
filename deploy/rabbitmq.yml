@@ -16,6 +16,9 @@ services:
       - rabbitmq-lib:/var/lib/rabbitmq/
       - rabbitmq-log:/var/log/rabbitmq
 
+    networks:
+      - custom_network
+
 configs:
   rabbitmq-plugins:
     content: "[rabbitmq_management]."  
@@ -25,3 +28,7 @@ volumes:
     driver: local
   rabbitmq-log:
     driver: local
+
+networks:
+  custom_network:
+    external: true

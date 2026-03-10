@@ -1,15 +1,23 @@
-FROM python:3.11-slim
+FROM python:3.9-slim AS builder
 
-WORKDIR /app
-
-RUN mkdir -p /.certs
+WORKDIR /install
 
 COPY req.txt .
 
-RUN pip install --no-cache-dir -r req.txt
+RUN pip install --upgrade pip \
+ && pip install --prefix=/install --no-cache-dir -r req.txt
 
+
+FROM python:3.9-slim AS dev-envs
+
+WORKDIR /app
+
+# Copy installed packages only
+COPY --from=builder /install /usr/local
+
+# Copy application code
 COPY . .
 
-EXPOSE 3000
+EXPOSE 3003
 
 CMD ["python", "run.py"]
