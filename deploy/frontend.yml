@@ -8,6 +8,9 @@ services:
     env_file:
       - ./.env.development
 
+    labels:
+      - traefik.enable=true
+      - traefik.http.router.frontend-http.rule=Host(`frontend.hacktheway.live`)
     networks:
       - custom_network
 
