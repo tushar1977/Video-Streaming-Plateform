@@ -1,8 +1,11 @@
-import concurrent.futures
+from concurrent.futures.thread import ThreadPoolExecutor
 import logging
-import eventlet
+import shutil
+import concurrent.futures
 import datetime
 import json
+from threading import Event
+import ffmpeg
 from uploadPipeline.rabbitmq import VideoQueueManager, createChannel
 from flask import (
     Blueprint,
@@ -12,7 +15,6 @@ import os
 from uploadPipeline.uploadPipeline import (
     Video_Quality,
     create_master_playlist,
-    resize_video,
 )
 from uploadPipeline import mongo
 import random
@@ -21,6 +23,14 @@ import string
 video = Blueprint("video", __name__)
 queue_manager = VideoQueueManager()
 logger = logging.getLogger(__name__)
+
+
+env = os.environ.get("FLASK_ENV")
+stop_event = Event()
+
+
+class VideoProcessingError(Exception):
+    pass
 
 
 def send_progress_update(
@@ -55,109 +65,120 @@ def send_progress_update(
     # sock_upload.emit("send_updates", progress_msg, room=f"userId_{user_id}")
 
 
-def process_single_video(
-    original_path,
-    final_path,
-    quality,
-    width,
-    height,
-    user_id,
-    base_name,
-    quality_index,
-    total_qualities,
-):
-    base_progress = 5 + (quality_index * 85 // total_qualities)
+def process_videos(original_path, video_folder, base_name, user_id):
     send_progress_update(
         user_id=user_id,
         base_name=base_name,
-        status="processing_quality",
-        progress=base_progress,
-        current_quality=quality.name,
-        message=f"Starting {quality.name} quality processing",
+        status="processing_qualities",
+        progress=5,
+        message="Started processing",
     )
 
-    resize_video(original_path, final_path, width, height)
-    return True
+    total_quantites = len(Video_Quality)
+    qualities = list(Video_Quality)
 
+    probe = ffmpeg.probe(original_path)
+    has_audio = any(stream["codec_type"] == "audio" for stream in probe["streams"])
+    max_workers = min(3, total_quantites)
 
-def process_videos(original_path, video_folder, base_name, user_id):
-    futures = []
-    completed_count = 0
-    total_qualities = len(Video_Quality)
+    def process_single_video(q):
+        if stop_event.is_set():
+            return {"quality": q.name, "success": False, "error": "Cancelled"}
+        try:
+            inp = ffmpeg.input(original_path)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=total_qualities) as executor:
-        for idx, quality in enumerate(Video_Quality):
-            quality_path = os.path.join(video_folder, f"{quality.name}@{base_name}")
+            width, height = q.value[0], q.value[1]
+            quality_path = os.path.join(video_folder, f"{q.name}@{base_name}")
             hls_folder = os.path.join(quality_path, "hls")
             os.makedirs(hls_folder, exist_ok=True)
             final_path = os.path.join(hls_folder, "stream.m3u8")
+            segment_pattern = os.path.join(hls_folder, "segment_%03d.ts")
 
-            future = executor.submit(
-                process_single_video,
-                original_path=original_path,
-                final_path=final_path,
-                quality=quality,
-                width=quality.value[0],
-                height=quality.value[1],
+            v = inp.video.filter("scale", width, height)
+
+            output_args = dict(
+                vcodec="libx264",
+                crf=30,
+                video_bitrate="1200k",
+                f="hls",
+                hls_time=4,
+                force_key_frames="expr:gte(t,n_forced*4)",
+                hls_playlist_type="vod",
+                hls_segment_filename=segment_pattern,
+                hls_flags="independent_segments",
+                movflags="+faststart",
+                threads=max(1, os.cpu_count() // max_workers),
+            )
+
+            if has_audio:
+                output_args.update(
+                    {
+                        "acodec": "aac",
+                        "audio_bitrate": "128k",
+                        "ac": 2,
+                        "ar": 48000,
+                    }
+                )
+                out = ffmpeg.output(v, inp.audio, final_path, **output_args)
+            else:
+                out = ffmpeg.output(v, final_path, **output_args)
+
+            out.run(
+                overwrite_output=True,
+                capture_stdout=True,
+                capture_stderr=True,
+                quiet=False if env == "dev" else True,
+            )
+
+            return {"quality": q.name, "success": True}
+
+        except ffmpeg.Error as e:
+            stop_event.set()
+            return {"quality": q.name, "success": False, "error": str(e)}
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as e:
+        futures = [e.submit(process_single_video, q) for q in qualities]
+
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+
+            if not result["success"]:
+                send_progress_update(
+                    user_id=user_id,
+                    base_name=base_name,
+                    status="quality_failed",
+                    progress=0,
+                    error=result["error"],
+                )
+
+                for q in qualities:
+                    quality_path = os.path.join(video_folder, f"{q.name}@{base_name}")
+                    if os.path.exists(quality_path):
+                        shutil.rmtree(quality_path, ignore_errors=True)
+
+                raise VideoProcessingError(result["error"])
+
+            completed += 1
+
+            send_progress_update(
                 user_id=user_id,
                 base_name=base_name,
-                quality_index=idx,
-                total_qualities=total_qualities,
+                status="quality_progress",
+                progress=5 + int((completed / total_quantites) * 90),
+                completed_quality=result["quality"],
+                completed_count=completed,
+                total_qualities=total_quantites,
             )
-            futures.append((future, quality_path, quality))
-        for future, quality_path, quality in futures:
-            try:
-                future.result(3600)
-                completed_count += 1
 
-                progress = 5 + int((completed_count / total_qualities) * 85)
-
-                logger.info(f"{quality.name}, progress = {progress}")
-                send_progress_update(
-                    user_id=user_id,
-                    base_name=base_name,
-                    status="quality_processed",
-                    progress=progress,
-                    current_quality=quality.name,
-                    completed_qualities=completed_count,
-                    total_qualities=total_qualities,
-                )
-
-            except concurrent.futures.TimeoutError:
-                logger.error(f"Timeout processing quality: {quality.name}")
-                send_progress_update(
-                    user_id=user_id,
-                    base_name=base_name,
-                    status="quality_failed",
-                    progress=5 + int((completed_count / total_qualities) * 85),
-                    current_quality=quality.name,
-                    error=f"Timeout processing {quality.name}",
-                )
-                return True
-            except Exception as e:
-                logger.error(f"Error processing video quality {quality.name}: {e}")
-                send_progress_update(
-                    user_id=user_id,
-                    base_name=base_name,
-                    status="quality_failed",
-                    progress=5 + int((completed_count / total_qualities) * 85),
-                    current_quality=quality.name,
-                    error=str(e),
-                )
-
-                for f, quality_path, _ in futures:
-                    f.cancel()
-                    if os.path.exists(quality_path):
-                        try:
-                            import shutil
-
-                            shutil.rmtree(quality_path)
-                        except Exception as e:
-                            logger.error(
-                                f"Error cleaning up quality path {quality_path}: {e}"
-                            )
-                return True
-    return False
+    send_progress_update(
+        user_id=user_id,
+        base_name=base_name,
+        status="quality_processed",
+        progress=100,
+        completed_qualities=total_quantites,
+        total_qualities=total_quantites,
+    )
 
 
 def upload(ch, method, properties, body):
@@ -190,28 +211,18 @@ def upload(ch, method, properties, body):
         video_folder = os.path.dirname(video_path)
         original_path = video_path
 
-        processing_failed = process_videos(
-            original_path=original_path,
-            video_folder=video_folder,
-            base_name=base_name,
-            user_id=user_id,
-        )
-        if os.path.exists(original_path):
-            os.remove(original_path)
-
-        if processing_failed:
-            send_progress_update(
-                user_id=user_id,
+        try:
+            process_videos(
+                original_path=original_path,
+                video_folder=video_folder,
                 base_name=base_name,
-                status="processing_failed",
-                progress=100,
-                current_quality=None,
-                total_qualities=len(Video_Quality),
+                user_id=user_id,
             )
-            logger.error(" [x] Video processing failed")
-            should_ack = True
+        except VideoProcessingError:
             return
-
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            return
         unique_name = "".join(
             random.choice(string.ascii_letters + string.digits) for _ in range(8)
         )
@@ -240,7 +251,6 @@ def upload(ch, method, properties, body):
             message="Video processing completed successfully!",
         )
 
-        eventlet.sleep(1)
         logger.info(
             f" [x] Successfully processed video: {unique_name} for user: {user_id}"
         )
